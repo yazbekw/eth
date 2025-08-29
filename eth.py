@@ -10,7 +10,7 @@ import pytz
 import sys
 import threading
 from flask import Flask, jsonify
-import talib
+import ta
 from typing import Dict, List, Optional, Tuple, Union
 
 app = Flask(__name__)
@@ -116,13 +116,13 @@ def calculate_indicators(df: pd.DataFrame) -> Optional[pd.DataFrame]:
         df = df.copy()
         
         # ATR
-        df['atr'] = talib.ATR(df['high'], df['low'], df['close'], timeperiod=ATR_PERIOD)
+        df['atr'] = ta.ATR(df['high'], df['low'], df['close'], timeperiod=ATR_PERIOD)
         
         # RSI
-        df['rsi'] = talib.RSI(df['close'], timeperiod=RSI_PERIOD)
+        df['rsi'] = ta.RSI(df['close'], timeperiod=RSI_PERIOD)
         
         # MACD
-        macd, macd_signal, macd_hist = talib.MACD(
+        macd, macd_signal, macd_hist = ta.MACD(
             df['close'], fastperiod=MACD_FAST, 
             slowperiod=MACD_SLOW, signalperiod=MACD_SIGNAL
         )
@@ -131,10 +131,10 @@ def calculate_indicators(df: pd.DataFrame) -> Optional[pd.DataFrame]:
         df['macd_hist'] = macd_hist
         
         # ADX
-        df['adx'] = talib.ADX(df['high'], df['low'], df['close'], timeperiod=ADX_PERIOD)
+        df['adx'] = ta.ADX(df['high'], df['low'], df['close'], timeperiod=ADX_PERIOD)
         
         # Bollinger Bands
-        df['bb_upper'], df['bb_middle'], df['bb_lower'] = talib.BBANDS(
+        df['bb_upper'], df['bb_middle'], df['bb_lower'] = ta.BBANDS(
             df['close'], timeperiod=BOLLINGER_PERIOD, 
             nbdevup=BOLLINGER_STD, nbdevdn=BOLLINGER_STD
         )
@@ -1126,3 +1126,4 @@ def main():
 
 if __name__ == "__main__":
     main()
+
