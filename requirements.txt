@@ -2,4 +2,5 @@ ccxt==4.2.72
 pandas==2.0.3
 numpy==1.24.3
 requests==2.31.0
-flask
+flask==2.3.3
+pytz==2023.3
