@@ -170,21 +170,6 @@ def calculate_position_sizing(current_price, eth_balance, usdt_balance):
         return 'balanced', 0
 
 def place_orders():
-    current_minute = datetime.now().minute
-    current_second = datetime.now().second
-
-    # الإشعار على رأس الساعة (أول 30 ثانية من الدقيقة 00)
-    if current_minute == 0 and current_second < 30:
-        message = f"""
-    📊 <b>Hourly Report - {datetime.now().strftime('%H:%M')}</b>
-    ━━━━━━━━━━━━━━━━━━━━
-    📈 <b>Price:</b> {current_price} USDT
-    💰 <b>ETH Balance:</b> {eth_balance:.4f} (${current_exposure_usd:.1f})
-    💵 <b>USDT Balance:</b> {usdt_balance:.1f}
-    🏦 <b>Total:</b> ${total_balance:.1f}
-    🕐 <i>Next update: {(datetime.now().hour + 1) % 24}:00</i>
-        """
-        send_telegram_message(message)
     """Main function to place market making orders"""
     try:
         # التحقق إذا كان التداول موقفاً
@@ -228,6 +213,27 @@ def place_orders():
         current_exposure_usd = eth_balance * current_price
         total_balance = current_exposure_usd + usdt_balance
         
+        # إشعار الاختبار كل 15 دقيقة - أضف هنا
+        current_minute = datetime.now().minute
+        if current_minute % 15 == 0:  # إشعار اختبار كل 15 دقيقة
+            test_msg = f"🔄 Bot is alive | {datetime.now().strftime('%H:%M:%S')}"
+            send_telegram_message(test_msg)
+            time.sleep(1)  # منع إرسال متعدد
+        
+        # الإشعار على رأس الساعة - أضف هنا
+        current_second = datetime.now().second
+        if current_minute == 0 and current_second < 30:
+            message = f"""
+📊 <b>Hourly Report - {datetime.now().strftime('%H:%M')}</b>
+━━━━━━━━━━━━━━━━━━━━
+📈 <b>Price:</b> {current_price} USDT
+💰 <b>ETH Balance:</b> {eth_balance:.4f} (${current_exposure_usd:.1f})
+💵 <b>USDT Balance:</b> {usdt_balance:.1f}
+🏦 <b>Total:</b> ${total_balance:.1f}
+🕐 <i>Next update: {(datetime.now().hour + 1) % 24}:00</i>
+            """
+            send_telegram_message(message)
+        
         # Check if within maximum exposure limits
         if current_exposure_usd > MAX_EXPOSURE:
             send_telegram_message("⚠️ Maximum exposure reached. No new buy orders.")
@@ -270,31 +276,13 @@ def place_orders():
                     logger.error(f"Sell order error: {e}")
                     send_telegram_message(f"❌ Sell order failed: {e}")
         
-        # Send status update every hour
-        if datetime.now().minute % 60 == 0:  # يعمل على 00, 60, 120 (أكثر مرونة)
-            message = f"""
-🤖 <b>ETH Market Maker - $100 Capital</b>
-├─ Price: <b>{current_price} USDT</b>
-├─ ATR: {atr:.2f} | StdDev: {std_dev:.4f}%
-├─ Orders: {buy_price} ← → {sell_price}
-├─ ETH: {eth_balance:.4f} (${current_exposure_usd:.1f})
-├─ USDT: {usdt_balance:.1f}
-├─ Total: ${total_balance:.1f}
-└─ Action: {action.upper()} {amount:.4f} ETH
-            """
-            send_telegram_message(message)
-        
     except Exception as e:
         logger.error(f"Error in place_orders: {e}")
         send_telegram_message(f"❌ Error in trading logic: {e}")
         
-if datetime.now().minute % 15 == 0:  # إشعار اختبار كل 15 دقيقة
-    test_msg = f"🔄 Bot is alive | {datetime.now().strftime('%H:%M:%S')}"
-    send_telegram_message(test_msg)
-
-import socket
-from flask import Flask
+import sys
 import threading
+from flask import Flask
 
 # إنشاء Flask app
 app = Flask(__name__)
@@ -334,30 +322,24 @@ def main():
         
         # إرسال رسالة البدء
         initial_status = "ENABLED" if TRADING_ENABLED else "PAUSED"
-        start_message = (
-            f"🚀 ETH Market Maker Started as Web Service!\n"
-            f"├─ Status: {initial_status}\n"
-            f"├─ Capital: ${TOTAL_CAPITAL}\n"
-            f"├─ Order size: ${ORDER_SIZE}\n"
-            f"└─ Health: http://localhost:{os.environ.get('PORT', 10000)}/"
-        )
+        start_message = f"""
+🚀 <b>ETH Market Maker Started as Web Service!</b>
+━━━━━━━━━━━━━━━━━━━━
+📊 <b>Status:</b> {initial_status}
+💼 <b>Capital:</b> ${TOTAL_CAPITAL}
+📦 <b>Order Size:</b> ${ORDER_SIZE}
+🌐 <b>Health:</b> http://localhost:{os.environ.get('PORT', 10000)}/
+🕐 <i>Start Time: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}</i>
+        """
         
         send_telegram_message(start_message)
         logger.info(f"Bot started as Web Service. Trading enabled: {TRADING_ENABLED}")
         
-        # الحلقة الرئيسية مع تعديلات الـ Web Service
-        iteration_count = 0
-        
+        # الحلقة الرئيسية
         while True:
             try:
-                iteration_count += 1
-                
-                # تنفيذ أوامر التداول كل 5 دقائق
-                if iteration_count % 1 == 0:  # يمكنك تعديل هذا حسب الحاجة
-                    place_orders()
-                
-                # انتظر فترة قصيرة وتتحقق من Health
-                time.sleep(60)  # انتظر دقيقة فقط
+                place_orders()
+                time.sleep(300)  # 5 دقائق كما في الأصل
                 
             except KeyboardInterrupt:
                 logger.info("Bot stopped by user")
@@ -373,8 +355,6 @@ def main():
         send_telegram_message(error_msg[:4000])
         sys.exit(1)
 
-
-
 if __name__ == "__main__":
     # تأكد من استيراد المكتبات الإضافية
     import sys
@@ -382,6 +362,7 @@ if __name__ == "__main__":
     
     # تشغيل البوت
     main()
+
 
 
 
