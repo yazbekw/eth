@@ -170,21 +170,21 @@ def calculate_position_sizing(current_price, eth_balance, usdt_balance):
         return 'balanced', 0
 
 def place_orders():
-current_minute = datetime.now().minute
-current_second = datetime.now().second
+    current_minute = datetime.now().minute
+    current_second = datetime.now().second
 
-# الإشعار على رأس الساعة (أول 30 ثانية من الدقيقة 00)
-if current_minute == 0 and current_second < 30:
-    message = f"""
-📊 <b>Hourly Report - {datetime.now().strftime('%H:%M')}</b>
-━━━━━━━━━━━━━━━━━━━━
-📈 <b>Price:</b> {current_price} USDT
-💰 <b>ETH Balance:</b> {eth_balance:.4f} (${current_exposure_usd:.1f})
-💵 <b>USDT Balance:</b> {usdt_balance:.1f}
-🏦 <b>Total:</b> ${total_balance:.1f}
-🕐 <i>Next update: {(datetime.now().hour + 1) % 24}:00</i>
-    """
-    send_telegram_message(message)
+    # الإشعار على رأس الساعة (أول 30 ثانية من الدقيقة 00)
+    if current_minute == 0 and current_second < 30:
+        message = f"""
+    📊 <b>Hourly Report - {datetime.now().strftime('%H:%M')}</b>
+    ━━━━━━━━━━━━━━━━━━━━
+    📈 <b>Price:</b> {current_price} USDT
+    💰 <b>ETH Balance:</b> {eth_balance:.4f} (${current_exposure_usd:.1f})
+    💵 <b>USDT Balance:</b> {usdt_balance:.1f}
+    🏦 <b>Total:</b> ${total_balance:.1f}
+    🕐 <i>Next update: {(datetime.now().hour + 1) % 24}:00</i>
+        """
+        send_telegram_message(message)
     """Main function to place market making orders"""
     try:
         # التحقق إذا كان التداول موقفاً
@@ -382,5 +382,6 @@ if __name__ == "__main__":
     
     # تشغيل البوت
     main()
+
 
 
