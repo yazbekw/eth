@@ -1,6 +1,28 @@
-ccxt==4.2.72
+# الأساسيات
+ccxt==4.2.6
 pandas==2.0.3
 numpy==1.24.3
 requests==2.31.0
+python-dotenv==1.0.0
+
+# التحليل الفني
+TA-Lib==0.4.28
+
+# الويب والخدمات
 flask==2.3.3
 pytz==2023.3
+
+# التحسينات
+python-decouple==3.8
+cachetools==5.3.1
+aiohttp==3.8.5
+
+# المراقبة والتحليل
+matplotlib==3.7.2
+seaborn==0.12.2
+plotly==5.15.0
+
+# التطوير والاختبار
+pytest==7.4.0
+black==23.9.1
+flake8==6.1.0
