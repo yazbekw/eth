@@ -71,12 +71,13 @@ class UnicodeEscapeHandler(logging.StreamHandler):
         except Exception:
             self.handleError(record)
 
+
 logging.basicConfig(
     level=logging.INFO,
     format='%(asctime)s - %(levelname)s - %(message)s',
     handlers=[
-        logging.FileHandler('eth_market_maker_v3.log', encoding='utf-8'),
-        UnicodeEscapeHandler()
+        logging.FileHandler('eth_market_maker_v2.log'),
+        logging.StreamHandler()
     ]
 )
 logger = logging.getLogger()
@@ -1119,6 +1120,7 @@ def main():
 
 if __name__ == "__main__":
     main()
+
 
 
 
