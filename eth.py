@@ -7,6 +7,9 @@ import logging
 import os
 from datetime import datetime
 import pytz 
+import sys
+import threading
+from flask import Flask
 
 DAMASCUS_TZ = pytz.timezone('Asia/Damascus')
 
@@ -32,6 +35,10 @@ STD_DEV_PERIOD = 14
 ATR_MULTIPLIER = 1.8
 STD_DEV_MULTIPLIER = 3
 
+# إعدادات التحكم بالمخاطر
+MAX_RETRIES = 3
+RETRY_DELAY = 5
+
 # ------------------- Initialize -------------------
 logging.basicConfig(
     level=logging.INFO,
@@ -50,8 +57,6 @@ coinex = ccxt.coinex({
     'enableRateLimit': True,
 })
 
-
-    
 # ------------------- Telegram Functions -------------------
 def send_telegram_message(message):
     """Send message to Telegram"""
@@ -67,11 +72,27 @@ def send_telegram_message(message):
     except Exception as e:
         logger.error(f"Failed to send Telegram message: {e}")
 
+# ------------------- Enhanced API Functions -------------------
+def robust_api_call(func, *args, **kwargs):
+    """استدعاء API مع إعادة المحاولة عند الفشل"""
+    for attempt in range(MAX_RETRIES):
+        try:
+            return func(*args, **kwargs)
+        except (ccxt.NetworkError, ccxt.ExchangeError) as e:
+            logger.warning(f"API call attempt {attempt+1} failed: {e}")
+            if attempt < MAX_RETRIES - 1:
+                time.sleep(RETRY_DELAY)
+            else:
+                raise e
+        except Exception as e:
+            logger.error(f"Unexpected error in API call: {e}")
+            raise e
+
 # ------------------- Trading Functions -------------------
 def get_historical_data(limit=100):
     """Get historical OHLCV data"""
     try:
-        ohlcv = coinex.fetch_ohlcv(SYMBOL, TIMEFRAME, limit=limit)
+        ohlcv = robust_api_call(coinex.fetch_ohlcv, SYMBOL, TIMEFRAME, limit=limit)
         df = pd.DataFrame(ohlcv, columns=['timestamp', 'open', 'high', 'low', 'close', 'volume'])
         df['timestamp'] = pd.to_datetime(df['timestamp'], unit='ms')
         return df
@@ -96,9 +117,9 @@ def calculate_indicators(df):
         # Calculate ATR
         df['atr'] = df['true_range'].rolling(window=ATR_PERIOD).mean()
         
-        # Calculate price changes and Std Dev - التصحيح هنا
-        df['price_change_pct'] = df['close'].pct_change()  # إزالة * 100
-        df['std_dev'] = df['price_change_pct'].rolling(window=STD_DEV_PERIOD).std() * 100  # الضرب في 100 هنا
+        # Calculate price changes and Std Dev
+        df['price_change_pct'] = df['close'].pct_change()
+        df['std_dev'] = df['price_change_pct'].rolling(window=STD_DEV_PERIOD).std() * 100
         
         return df
     except Exception as e:
@@ -108,7 +129,7 @@ def calculate_indicators(df):
 def get_current_price():
     """Get current market price"""
     try:
-        ticker = coinex.fetch_ticker(SYMBOL)
+        ticker = robust_api_call(coinex.fetch_ticker, SYMBOL)
         return ticker['last']
     except Exception as e:
         logger.error(f"Error getting current price: {e}")
@@ -118,7 +139,7 @@ def get_current_price():
 def get_balance():
     """Get account balances"""
     try:
-        balance = coinex.fetch_balance()
+        balance = robust_api_call(coinex.fetch_balance)
         eth_balance = balance['ETH']['free'] if 'ETH' in balance else 0
         usdt_balance = balance['USDT']['free'] if 'USDT' in balance else 0
         return eth_balance, usdt_balance
@@ -128,18 +149,36 @@ def get_balance():
         return 0, 0
 
 def cancel_all_orders():
-    """Cancel all open orders for our symbol"""
+    """Cancel all open orders for our symbol (الوظيفة الأصلية)"""
     try:
-        orders = coinex.fetch_open_orders(SYMBOL)
+        orders = robust_api_call(coinex.fetch_open_orders, SYMBOL)
         for order in orders:
             try:
-                coinex.cancel_order(order['id'], SYMBOL)
+                robust_api_call(coinex.cancel_order, order['id'], SYMBOL)
                 logger.info(f"Cancelled order {order['id']}")
                 time.sleep(0.1)
             except Exception as e:
                 logger.error(f"Error cancelling order {order['id']}: {e}")
     except Exception as e:
         logger.error(f"Error fetching orders: {e}")
+
+def monitor_orders():
+    """مراقبة الأوامر وإلغاء تلك التي لم تنجز بعد فترة زمنية (وظيفة جديدة)"""
+    try:
+        orders = robust_api_call(coinex.fetch_open_orders, SYMBOL)
+        for order in orders:
+            order_id = order['id']
+            order_time = datetime.fromtimestamp(order['timestamp']/1000, DAMASCUS_TZ)
+            time_diff = (datetime.now(DAMASCUS_TZ) - order_time).total_seconds() / 60
+            
+            # إلغاء الأوامر القديمة (أكثر من 30 دقيقة)
+            if time_diff > 30:
+                robust_api_call(coinex.cancel_order, order_id, SYMBOL)
+                logger.info(f"Cancelled stale order {order_id} after {time_diff:.1f} minutes")
+                send_telegram_message(f"⏹️ Cancelled stale order {order_id} after {time_diff:.1f} minutes")
+                
+    except Exception as e:
+        logger.error(f"Error monitoring orders: {e}")
 
 def calculate_order_distance(current_price, atr, std_dev):
     """Calculate dynamic order distance"""
@@ -175,6 +214,34 @@ def calculate_position_sizing(current_price, eth_balance, usdt_balance):
         # Portfolio is balanced
         return 'balanced', 0
 
+# ------------------- Performance Tracking -------------------
+trade_history = []
+
+def track_performance(order_type, amount, price, fee=0.001):
+    """تتبع أداء الصفقات"""
+    trade = {
+        'timestamp': datetime.now(DAMASCUS_TZ),
+        'type': order_type,
+        'amount': amount,
+        'price': price,
+        'fee': fee,
+        'total': amount * price
+    }
+    trade_history.append(trade)
+    
+    # حفظ الأداء في ملف كل 10 صفقات
+    if len(trade_history) % 10 == 0:
+        save_performance_report()
+
+def save_performance_report():
+    """حفظ تقرير الأداء في ملف"""
+    try:
+        df = pd.DataFrame(trade_history)
+        df.to_csv('trading_performance.csv', index=False)
+        logger.info("Performance report saved")
+    except Exception as e:
+        logger.error(f"Error saving performance report: {e}")
+
 def place_orders():
     """Main function to place market making orders"""
     try:
@@ -191,6 +258,9 @@ def place_orders():
                         f"Exposure: ${exposure:.1f} | USDT: {usdt_balance:.1f}"
                     )
             return
+            
+        # مراقبة وإلغاء الأوامر القديمة (مكملة وليست بديلة)
+        monitor_orders()
             
         # Get market data
         df = get_historical_data(limit=100)
@@ -219,14 +289,14 @@ def place_orders():
         current_exposure_usd = eth_balance * current_price
         total_balance = current_exposure_usd + usdt_balance
         
-        # إشعار الاختبار كل 15 دقيقة - أضف هنا
+        # إشعار الاختبار كل 15 دقيقة
         current_minute = datetime.now(DAMASCUS_TZ).minute
         if current_minute % 15 == 0:  # إشعار اختبار كل 15 دقيقة
             test_msg = f"🔄 Bot is alive | {datetime.now(DAMASCUS_TZ).strftime('%H:%M:%S')}"
             send_telegram_message(test_msg)
             time.sleep(1)  # منع إرسال متعدد
         
-        # الإشعار على رأس الساعة - أضف هنا
+        # الإشعار على رأس الساعة
         current_second = datetime.now(DAMASCUS_TZ).second
         if current_minute == 0 and current_second < 30:
             message = f"""
@@ -254,7 +324,7 @@ def place_orders():
         buy_price = round(current_price - order_distance, 2)
         sell_price = round(current_price + order_distance, 2)
         
-        # Cancel existing orders
+        # Cancel existing orders (الوظيفة الأصلية - تلغي الكل)
         cancel_all_orders()
         
         # Auto-balancing logic
@@ -265,8 +335,9 @@ def place_orders():
             buy_amount = amount
             if buy_amount * buy_price >= 5:  # Minimum order value check
                 try:
-                    order = coinex.create_limit_buy_order(SYMBOL, buy_amount, buy_price)
+                    order = robust_api_call(coinex.create_limit_buy_order, SYMBOL, buy_amount, buy_price)
                     send_telegram_message(f"✅ BUY: {buy_amount:.4f} ETH @ {buy_price} USDT")
+                    track_performance('buy', buy_amount, buy_price)
                 except Exception as e:
                     logger.error(f"Buy order error: {e}")
                     send_telegram_message(f"❌ Buy order failed: {e}")
@@ -276,8 +347,9 @@ def place_orders():
             sell_amount = amount
             if sell_amount >= 0.001:  # Minimum order size check
                 try:
-                    order = coinex.create_limit_sell_order(SYMBOL, sell_amount, sell_price)
+                    order = robust_api_call(coinex.create_limit_sell_order, SYMBOL, sell_amount, sell_price)
                     send_telegram_message(f"✅ SELL: {sell_amount:.4f} ETH @ {sell_price} USDT")
+                    track_performance('sell', sell_amount, sell_price)
                 except Exception as e:
                     logger.error(f"Sell order error: {e}")
                     send_telegram_message(f"❌ Sell order failed: {e}")
@@ -285,12 +357,8 @@ def place_orders():
     except Exception as e:
         logger.error(f"Error in place_orders: {e}")
         send_telegram_message(f"❌ Error in trading logic: {e}")
-        
-import sys
-import threading
-from flask import Flask
 
-# إنشاء Flask app
+# ------------------- Web Service Setup -------------------
 app = Flask(__name__)
 
 @app.route('/')
@@ -299,11 +367,33 @@ def health_check():
 
 @app.route('/status')
 def status():
+    current_price = get_current_price()
+    eth_balance, usdt_balance = get_balance()
+    
+    if current_price:
+        exposure = eth_balance * current_price
+        total = exposure + usdt_balance
+    else:
+        exposure = total = 0
+        
     return {
         "status": "active",
         "trading_enabled": TRADING_ENABLED,
-        "symbol": SYMBOL
+        "symbol": SYMBOL,
+        "eth_balance": eth_balance,
+        "usdt_balance": usdt_balance,
+        "exposure_usd": exposure,
+        "total_balance": total,
+        "last_update": datetime.now(DAMASCUS_TZ).isoformat()
     }, 200
+
+@app.route('/performance')
+def performance():
+    try:
+        df = pd.DataFrame(trade_history)
+        return df.to_json(orient='records'), 200, {'Content-Type': 'application/json'}
+    except:
+        return {"message": "No performance data available"}, 404
 
 def run_flask_app():
     """تشغيل Flask app للـ health checks"""
@@ -345,7 +435,7 @@ def main():
         while True:
             try:
                 place_orders()
-                time.sleep(300)  # 5 دقائق كما في الأصل
+                time.sleep(300)  # 5 دقائق
                 
             except KeyboardInterrupt:
                 logger.info("Bot stopped by user")
@@ -362,14 +452,4 @@ def main():
         sys.exit(1)
 
 if __name__ == "__main__":
-    # تأكد من استيراد المكتبات الإضافية
-    import sys
-    import traceback
-    
-    # تشغيل البوت
     main()
-
-
-
-
-
