@@ -295,7 +295,7 @@ def place_orders():
         total_balance = current_exposure_usd + usdt_balance
         
         # إشعار الاختبار كل 15 دقيقة - الإصلاح هنا
-        if current_minute % 15 == 0 and current_second < 30:  # ✅ الآن current_second معرف
+        if current_minute % 15 == 0 and current_second < 30 and current_minute != 0:  # ✅ الآن current_second معرف
             test_msg = f"""
 🤖 <b>Bot Status - {now.strftime('%H:%M:%S')}</b>
 ━━━━━━━━━━━━━━━━━━━━
@@ -464,3 +464,4 @@ def main():
 
 if __name__ == "__main__":
     main()
+
