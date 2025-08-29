@@ -291,10 +291,24 @@ def place_orders():
         
         # إشعار الاختبار كل 15 دقيقة
         current_minute = datetime.now(DAMASCUS_TZ).minute
-        if current_minute % 15 == 0:  # إشعار اختبار كل 15 دقيقة
-            test_msg = f"🔄 Bot is alive | {datetime.now(DAMASCUS_TZ).strftime('%H:%M:%S')}"
-            send_telegram_message(test_msg)
-            time.sleep(1)  # منع إرسال متعدد
+        if current_minute % 15 == 0 and current_second < 30:  # إشعار اختبار كل 15 دقيقة
+            current_price = get_current_price()
+            eth_balance, usdt_balance = get_balance()
+    
+            if current_price:
+                exposure = eth_balance * current_price
+                total_balance = exposure + usdt_balance
+                test_msg = f"""
+        🤖 <b>Bot Status - {datetime.now(DAMASCUS_TZ).strftime('%H:%M:%S')}</b>
+        ━━━━━━━━━━━━━━━━━━━━
+        📈 <b>Price:</b> {current_price} USDT
+        💰 <b>ETH Balance:</b> {eth_balance:.4f} (${exposure:.1f})
+        💵 <b>USDT Balance:</b> {usdt_balance:.1f}
+        🏦 <b>Total Balance:</b> ${total_balance:.1f}
+        🔄 <i>System operational - Next check in 15min</i>
+                """
+                send_telegram_message(test_msg)
+                time.sleep(1)  # منع إرسال متعدد
         
         # الإشعار على رأس الساعة
         current_second = datetime.now(DAMASCUS_TZ).second
@@ -453,3 +467,4 @@ def main():
 
 if __name__ == "__main__":
     main()
+
