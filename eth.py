@@ -6,6 +6,9 @@ import requests
 import logging
 import os
 from datetime import datetime
+import pytz 
+
+DAMASCUS_TZ = pytz.timezone('Asia/Damascus')
 
 # ------------------- Configuration from Environment Variables -------------------
 COINEX_ACCESS_ID = os.environ.get('COINEX_ACCESS_ID')
@@ -93,9 +96,9 @@ def calculate_indicators(df):
         # Calculate ATR
         df['atr'] = df['true_range'].rolling(window=ATR_PERIOD).mean()
         
-        # Calculate price changes and Std Dev
-        df['price_change_pct'] = df['close'].pct_change() * 100
-        df['std_dev'] = df['price_change_pct'].rolling(window=STD_DEV_PERIOD).std()
+        # Calculate price changes and Std Dev - التصحيح هنا
+        df['price_change_pct'] = df['close'].pct_change()  # إزالة * 100
+        df['std_dev'] = df['price_change_pct'].rolling(window=STD_DEV_PERIOD).std() * 100  # الضرب في 100 هنا
         
         return df
     except Exception as e:
@@ -143,7 +146,10 @@ def calculate_order_distance(current_price, atr, std_dev):
     try:
         atr_distance = ATR_MULTIPLIER * atr
         std_dev_distance = current_price * (STD_DEV_MULTIPLIER * std_dev / 100)
-        return max(atr_distance, std_dev_distance)
+        # إضافة حد أدنى وأقصى للمسافة
+        min_distance = current_price * 0.002  # 0.2%
+        max_distance = current_price * 0.01   # 1%
+        return max(min(max(atr_distance, std_dev_distance), max_distance), min_distance)
     except:
         return current_price * 0.005  # 0.5% fallback
 
@@ -175,7 +181,7 @@ def place_orders():
         # التحقق إذا كان التداول موقفاً
         if not TRADING_ENABLED:
             # مراقبة فقط بدون تداول
-            if datetime.now().minute % 30 == 0:  # إشعار كل 30 دقيقة
+            if datetime.now(DAMASCUS_TZ).minute % 30 == 0:  # إشعار كل 30 دقيقة
                 current_price = get_current_price()
                 eth_balance, usdt_balance = get_balance()
                 if current_price:
@@ -214,23 +220,23 @@ def place_orders():
         total_balance = current_exposure_usd + usdt_balance
         
         # إشعار الاختبار كل 15 دقيقة - أضف هنا
-        current_minute = datetime.now().minute
+        current_minute = datetime.now(DAMASCUS_TZ).minute
         if current_minute % 15 == 0:  # إشعار اختبار كل 15 دقيقة
-            test_msg = f"🔄 Bot is alive | {datetime.now().strftime('%H:%M:%S')}"
+            test_msg = f"🔄 Bot is alive | {datetime.now(DAMASCUS_TZ).strftime('%H:%M:%S')}"
             send_telegram_message(test_msg)
             time.sleep(1)  # منع إرسال متعدد
         
         # الإشعار على رأس الساعة - أضف هنا
-        current_second = datetime.now().second
+        current_second = datetime.now(DAMASCUS_TZ).second
         if current_minute == 0 and current_second < 30:
             message = f"""
-📊 <b>Hourly Report - {datetime.now().strftime('%H:%M')}</b>
+📊 <b>Hourly Report - {datetime.now(DAMASCUS_TZ).strftime('%H:%M')}</b>
 ━━━━━━━━━━━━━━━━━━━━
 📈 <b>Price:</b> {current_price} USDT
 💰 <b>ETH Balance:</b> {eth_balance:.4f} (${current_exposure_usd:.1f})
 💵 <b>USDT Balance:</b> {usdt_balance:.1f}
 🏦 <b>Total:</b> ${total_balance:.1f}
-🕐 <i>Next update: {(datetime.now().hour + 1) % 24}:00</i>
+🕐 <i>Next update: {(datetime.now(DAMASCUS_TZ).hour + 1) % 24}:00</i>
             """
             send_telegram_message(message)
         
@@ -329,7 +335,7 @@ def main():
 💼 <b>Capital:</b> ${TOTAL_CAPITAL}
 📦 <b>Order Size:</b> ${ORDER_SIZE}
 🌐 <b>Health:</b> http://localhost:{os.environ.get('PORT', 10000)}/
-🕐 <i>Start Time: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}</i>
+🕐 <i>Start Time: {datetime.now(DAMASCUS_TZ).strftime('%Y-%m-%d %H:%M:%S')}</i>
         """
         
         send_telegram_message(start_message)
@@ -362,6 +368,7 @@ if __name__ == "__main__":
     
     # تشغيل البوت
     main()
+
 
 
 
