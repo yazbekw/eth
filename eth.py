@@ -47,19 +47,7 @@ coinex = ccxt.coinex({
     'enableRateLimit': True,
 })
 
-import socket
-from flask import Flask
 
-app = Flask(__name__)
-
-@app.route('/')
-def health_check():
-    return "ETH Market Maker is running", 200
-
-def run_flask_app():
-    """تشغيل Flask app للـ health checks"""
-    port = int(os.environ.get('PORT', 10000))
-    app.run(host='0.0.0.0', port=port, debug=False)
     
 # ------------------- Telegram Functions -------------------
 def send_telegram_message(message):
@@ -285,111 +273,88 @@ def place_orders():
         logger.error(f"Error in place_orders: {e}")
         send_telegram_message(f"❌ Error in trading logic: {e}")
 
+import socket
+from flask import Flask
+import threading
+
+# إنشاء Flask app
+app = Flask(__name__)
+
+@app.route('/')
+def health_check():
+    return "ETH Market Maker is running", 200
+
+@app.route('/status')
+def status():
+    return {
+        "status": "active",
+        "trading_enabled": TRADING_ENABLED,
+        "symbol": SYMBOL
+    }, 200
+
+def run_flask_app():
+    """تشغيل Flask app للـ health checks"""
+    port = int(os.environ.get('PORT', 10000))
+    app.run(host='0.0.0.0', port=port, debug=False, use_reloader=False)
+
 def main():
-    """Main bot function with complete Render compatibility"""
+    """الدالة الرئيسية المعدلة للعمل كـ Web Service"""
     try:
-        # التحقق من المتغيرات البيئية المطلوبة
+        # بدء Flask في thread منفصل
+        flask_thread = threading.Thread(target=run_flask_app, daemon=True)
+        flask_thread.start()
+        
+        # التحقق من المتغيرات البيئية
         required_env_vars = ['COINEX_ACCESS_ID', 'COINEX_SECRET_KEY', 'TELEGRAM_BOT_TOKEN', 'TELEGRAM_CHAT_ID']
         missing_vars = [var for var in required_env_vars if not os.environ.get(var)]
         
         if missing_vars:
             error_msg = f"❌ Missing environment variables: {', '.join(missing_vars)}"
             print(error_msg)
-            # حاول إرسال رسالة لو كان لديك جزء من المتغيرات
-            if os.environ.get('TELEGRAM_BOT_TOKEN') and os.environ.get('TELEGRAM_CHAT_ID'):
-                try:
-                    send_telegram_message(error_msg)
-                except:
-                    pass
             sys.exit(1)
-        
-        # التحقق من بيئة Render وإعداد ال logging
-        if 'RENDER' in os.environ:
-            logger.info("Running on Render environment")
-            # على Render نستخدم StreamHandler فقط
-            for handler in logger.handlers[:]:
-                logger.removeHandler(handler)
-            logger.addHandler(logging.StreamHandler())
-        else:
-            logger.info("Running on local environment")
         
         # إرسال رسالة البدء
         initial_status = "ENABLED" if TRADING_ENABLED else "PAUSED"
         start_message = (
-            f"🚀 ETH Market Maker Started!\n"
+            f"🚀 ETH Market Maker Started as Web Service!\n"
             f"├─ Status: {initial_status}\n"
             f"├─ Capital: ${TOTAL_CAPITAL}\n"
             f"├─ Order size: ${ORDER_SIZE}\n"
-            f"├─ Max exposure: ${MAX_EXPOSURE}\n"
-            f"└─ Environment: {'Render' if 'RENDER' in os.environ else 'Local'}"
+            f"└─ Health: http://localhost:{os.environ.get('PORT', 10000)}/"
         )
         
         send_telegram_message(start_message)
-        logger.info(f"Bot started. Trading enabled: {TRADING_ENABLED}")
+        logger.info(f"Bot started as Web Service. Trading enabled: {TRADING_ENABLED}")
         
-        # عدادات للمراقبة
+        # الحلقة الرئيسية مع تعديلات الـ Web Service
         iteration_count = 0
-        last_status_time = time.time()
         
-        # الحلقة الرئيسية
         while True:
             try:
                 iteration_count += 1
-                current_time = time.time()
                 
-                # تسجيل الدخول كل 10 تكرارات أو كل ساعة
-                if iteration_count % 10 == 0 or current_time - last_status_time > 3600:
-                    logger.info(f"Bot iteration #{iteration_count} - Running normally")
-                    last_status_time = current_time
+                # تنفيذ أوامر التداول كل 5 دقائق
+                if iteration_count % 1 == 0:  # يمكنك تعديل هذا حسب الحاجة
+                    place_orders()
                 
-                # تنفيذ أوامر التداول
-                place_orders()
-                
-                # انتظر 5 دقائق بين كل تكرار
-                time.sleep(300)
+                # انتظر فترة قصيرة وتتحقق من Health
+                time.sleep(60)  # انتظر دقيقة فقط
                 
             except KeyboardInterrupt:
                 logger.info("Bot stopped by user")
-                send_telegram_message("⏹️ Bot stopped manually by user")
+                send_telegram_message("⏹️ Bot stopped manually")
                 break
-                
-            except ccxt.NetworkError as e:
-                logger.error(f"Network error: {e}")
-                send_telegram_message(f"🌐 Network error: {str(e)[:100]}...")
-                time.sleep(60)  # انتظر دقيقة ثم حاول مرة أخرى
-                
-            except ccxt.ExchangeError as e:
-                logger.error(f"Exchange error: {e}")
-                send_telegram_message(f"💱 Exchange error: {str(e)[:100]}...")
-                time.sleep(300)  # انتظر 5 دقائق للتبادل
-                
-            except requests.exceptions.RequestException as e:
-                logger.error(f"Request error: {e}")
-                time.sleep(30)  # انتظر 30 ثانية لأخطاء الشبكة
-                
             except Exception as e:
-                logger.error(f"Unexpected error in main loop: {e}")
-                logger.error(traceback.format_exc())
-                
-                # أرسل تفاصيل الخطأ لكن لا تغرق التلجرام
-                error_summary = f"⚠️ Unexpected error: {type(e).__name__}: {str(e)[:200]}"
-                send_telegram_message(error_summary)
-                
-                time.sleep(60)  # انتظر دقيقة قبل إعادة المحاولة
+                logger.error(f"Error in main loop: {e}")
+                time.sleep(60)
                 
     except Exception as e:
-        # معالجة الأخطاء القاتلة
-        error_msg = f"❌ FATAL ERROR in main: {type(e).__name__}: {str(e)}"
+        error_msg = f"❌ FATAL ERROR: {str(e)}"
         logger.error(error_msg)
-        logger.error(traceback.format_exc())
-        
-        # حاول إرسال رسالة خطأ إذا كان التلجرام يعمل
-        try:
-            send_telegram_message(f"💥 CRITICAL FAILURE: {error_msg[:2000]}")
-        except:
-            pass
-            
+        send_telegram_message(error_msg[:4000])
         sys.exit(1)
+
+
 
 if __name__ == "__main__":
     # تأكد من استيراد المكتبات الإضافية
@@ -398,3 +363,4 @@ if __name__ == "__main__":
     
     # تشغيل البوت
     main()
+
