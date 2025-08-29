@@ -245,10 +245,15 @@ def save_performance_report():
 def place_orders():
     """Main function to place market making orders"""
     try:
+        # الحصول على الوقت الحالي مرة واحدة فقط
+        now = datetime.now(DAMASCUS_TZ)
+        current_minute = now.minute
+        current_second = now.second
+        
         # التحقق إذا كان التداول موقفاً
         if not TRADING_ENABLED:
             # مراقبة فقط بدون تداول
-            if datetime.now(DAMASCUS_TZ).minute % 30 == 0:  # إشعار كل 30 دقيقة
+            if current_minute % 30 == 0 and current_second < 30:  # إشعار كل 30 دقيقة
                 current_price = get_current_price()
                 eth_balance, usdt_balance = get_balance()
                 if current_price:
@@ -289,38 +294,30 @@ def place_orders():
         current_exposure_usd = eth_balance * current_price
         total_balance = current_exposure_usd + usdt_balance
         
-        # إشعار الاختبار كل 15 دقيقة
-        current_minute = datetime.now(DAMASCUS_TZ).minute
-        if current_minute % 15 == 0 and current_second < 30:  # إشعار اختبار كل 15 دقيقة
-            current_price = get_current_price()
-            eth_balance, usdt_balance = get_balance()
-    
-            if current_price:
-                exposure = eth_balance * current_price
-                total_balance = exposure + usdt_balance
-                test_msg = f"""
-        🤖 <b>Bot Status - {datetime.now(DAMASCUS_TZ).strftime('%H:%M:%S')}</b>
-        ━━━━━━━━━━━━━━━━━━━━
-        📈 <b>Price:</b> {current_price} USDT
-        💰 <b>ETH Balance:</b> {eth_balance:.4f} (${exposure:.1f})
-        💵 <b>USDT Balance:</b> {usdt_balance:.1f}
-        🏦 <b>Total Balance:</b> ${total_balance:.1f}
-        🔄 <i>System operational - Next check in 15min</i>
-                """
-                send_telegram_message(test_msg)
-                time.sleep(1)  # منع إرسال متعدد
+        # إشعار الاختبار كل 15 دقيقة - الإصلاح هنا
+        if current_minute % 15 == 0 and current_second < 30:  # ✅ الآن current_second معرف
+            test_msg = f"""
+🤖 <b>Bot Status - {now.strftime('%H:%M:%S')}</b>
+━━━━━━━━━━━━━━━━━━━━
+📈 <b>Price:</b> {current_price} USDT
+💰 <b>ETH Balance:</b> {eth_balance:.4f} (${current_exposure_usd:.1f})
+💵 <b>USDT Balance:</b> {usdt_balance:.1f}
+🏦 <b>Total Balance:</b> ${total_balance:.1f}
+🔄 <i>System operational - Next check in 15min</i>
+            """
+            send_telegram_message(test_msg)
+            time.sleep(1)  # منع إرسال متعدد
         
         # الإشعار على رأس الساعة
-        current_second = datetime.now(DAMASCUS_TZ).second
         if current_minute == 0 and current_second < 30:
             message = f"""
-📊 <b>Hourly Report - {datetime.now(DAMASCUS_TZ).strftime('%H:%M')}</b>
+📊 <b>Hourly Report - {now.strftime('%H:%M')}</b>
 ━━━━━━━━━━━━━━━━━━━━
 📈 <b>Price:</b> {current_price} USDT
 💰 <b>ETH Balance:</b> {eth_balance:.4f} (${current_exposure_usd:.1f})
 💵 <b>USDT Balance:</b> {usdt_balance:.1f}
 🏦 <b>Total:</b> ${total_balance:.1f}
-🕐 <i>Next update: {(datetime.now(DAMASCUS_TZ).hour + 1) % 24}:00</i>
+🕐 <i>Next update: {(now.hour + 1) % 24}:00</i>
             """
             send_telegram_message(message)
         
@@ -467,4 +464,3 @@ def main():
 
 if __name__ == "__main__":
     main()
-
