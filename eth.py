@@ -92,7 +92,10 @@ coinex = ccxt.coinex({
     'enableRateLimit': True,
     'options': {
         'defaultType': 'spot',
-    }
+        'adjustForTimeDifference': True,
+    },
+    'timeout': 30000,
+    'verbose': False,
 })
 
 # ------------------- Global Variables -------------------
@@ -1126,4 +1129,5 @@ def main():
 
 if __name__ == "__main__":
     main()
+
 
