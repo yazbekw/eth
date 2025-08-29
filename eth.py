@@ -13,6 +13,9 @@ COINEX_SECRET_KEY = os.environ.get('COINEX_SECRET_KEY')
 TELEGRAM_BOT_TOKEN = os.environ.get('TELEGRAM_BOT_TOKEN')
 TELEGRAM_CHAT_ID = os.environ.get('TELEGRAM_CHAT_ID')
 
+# التحكم في التداول - تغيير إلى false لايقاف التداول
+TRADING_ENABLED = os.environ.get('TRADING_ENABLED', 'true').lower() == 'true'
+
 # إعدادات التداول لرأس مال 100 دولار
 SYMBOL = 'ETH/USDT'
 TOTAL_CAPITAL = 100  # رأس المال الإجمالي بالدولار
@@ -27,7 +30,14 @@ ATR_MULTIPLIER = 1.8
 STD_DEV_MULTIPLIER = 3
 
 # ------------------- Initialize -------------------
-logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
+logging.basicConfig(
+    level=logging.INFO,
+    format='%(asctime)s - %(levelname)s - %(message)s',
+    handlers=[
+        logging.FileHandler('eth_market_maker.log'),
+        logging.StreamHandler()
+    ]
+)
 logger = logging.getLogger()
 
 # Initialize Coinex exchange
@@ -62,6 +72,7 @@ def get_historical_data(limit=100):
         return df
     except Exception as e:
         logger.error(f"Error fetching historical data: {e}")
+        send_telegram_message(f"❌ Error fetching data: {e}")
         return None
 
 def calculate_indicators(df):
@@ -96,6 +107,7 @@ def get_current_price():
         return ticker['last']
     except Exception as e:
         logger.error(f"Error getting current price: {e}")
+        send_telegram_message(f"❌ Error getting price: {e}")
         return None
 
 def get_balance():
@@ -107,6 +119,7 @@ def get_balance():
         return eth_balance, usdt_balance
     except Exception as e:
         logger.error(f"Error getting balance: {e}")
+        send_telegram_message(f"❌ Error getting balance: {e}")
         return 0, 0
 
 def cancel_all_orders():
@@ -157,9 +170,24 @@ def calculate_position_sizing(current_price, eth_balance, usdt_balance):
 def place_orders():
     """Main function to place market making orders"""
     try:
+        # التحقق إذا كان التداول موقفاً
+        if not TRADING_ENABLED:
+            # مراقبة فقط بدون تداول
+            if datetime.now().minute % 30 == 0:  # إشعار كل 30 دقيقة
+                current_price = get_current_price()
+                eth_balance, usdt_balance = get_balance()
+                if current_price:
+                    exposure = eth_balance * current_price
+                    send_telegram_message(
+                        f"⏸️ Trading PAUSED | Price: {current_price} | "
+                        f"Exposure: ${exposure:.1f} | USDT: {usdt_balance:.1f}"
+                    )
+            return
+            
         # Get market data
         df = get_historical_data(limit=100)
         if df is None or len(df) < ATR_PERIOD:
+            logger.warning("Not enough data for indicators")
             return
         
         df = calculate_indicators(df)
@@ -175,6 +203,7 @@ def place_orders():
         std_dev = latest['std_dev']
         
         if pd.isna(atr) or pd.isna(std_dev):
+            logger.warning("Indicator values are not available yet")
             return
         
         # Get balances and calculate exposure
@@ -211,6 +240,7 @@ def place_orders():
                     send_telegram_message(f"✅ BUY: {buy_amount:.4f} ETH @ {buy_price} USDT")
                 except Exception as e:
                     logger.error(f"Buy order error: {e}")
+                    send_telegram_message(f"❌ Buy order failed: {e}")
         
         elif action == 'sell' and eth_balance >= 0.001:
             # Place sell order
@@ -221,6 +251,7 @@ def place_orders():
                     send_telegram_message(f"✅ SELL: {sell_amount:.4f} ETH @ {sell_price} USDT")
                 except Exception as e:
                     logger.error(f"Sell order error: {e}")
+                    send_telegram_message(f"❌ Sell order failed: {e}")
         
         # Send status update every hour
         if datetime.now().minute == 0:
@@ -238,10 +269,19 @@ def place_orders():
         
     except Exception as e:
         logger.error(f"Error in place_orders: {e}")
+        send_telegram_message(f"❌ Error in trading logic: {e}")
 
 def main():
     """Main bot function"""
-    send_telegram_message("🚀 ETH Market Maker Started! | Capital: $100 | Order size: $10")
+    initial_status = "ENABLED" if TRADING_ENABLED else "PAUSED"
+    send_telegram_message(
+        f"🚀 ETH Market Maker Started! | "
+        f"Status: {initial_status} | "
+        f"Capital: ${TOTAL_CAPITAL} | "
+        f"Order size: ${ORDER_SIZE}"
+    )
+    
+    logger.info(f"Bot started. Trading enabled: {TRADING_ENABLED}")
     
     while True:
         try:
