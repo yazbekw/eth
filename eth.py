@@ -15,10 +15,6 @@ from typing import Dict, List, Optional, Tuple, Union
 
 app = Flask(__name__)
 
-from dotenv import load_dotenv
-
-# تحميل متغيرات البيئة
-load_dotenv()
 
 # ------------------- Configuration -------------------
 TREND_FILTER_PERIOD = 50
@@ -90,12 +86,6 @@ coinex = ccxt.coinex({
     'apiKey': COINEX_ACCESS_ID,
     'secret': COINEX_SECRET_KEY,
     'enableRateLimit': True,
-    'options': {
-        'defaultType': 'spot',
-        'adjustForTimeDifference': True,
-    },
-    'timeout': 30000,
-    'verbose': False,
 })
 
 # ------------------- Global Variables -------------------
@@ -1129,5 +1119,6 @@ def main():
 
 if __name__ == "__main__":
     main()
+
 
 
