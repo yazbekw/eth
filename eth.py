@@ -14,6 +14,7 @@ from bs4 import BeautifulSoup
 import re
 from flask import Flask, jsonify
 import threading
+import aiohttp
 
 # إعداد التسجيل
 logging.basicConfig(
@@ -68,11 +69,11 @@ class CryptoNewsTracker:
         # آخر وقت لتحديث
         self.last_update = datetime.now()
         self.news_sources = {
-            'cryptopanic': True,
-            'binance': True,
             'newsapi': True,
+            'binance': True,
             'coingecko': True,
-            'reddit': False  # يمكن تفعيله لاحقاً
+            'coindesk': True,
+            'cointelegraph': True
         }
     
     async def send_telegram_message(self, message: str, parse_mode: str = 'HTML'):
@@ -110,8 +111,8 @@ class CryptoNewsTracker:
             'coindesk': 0.95, 'cointelegraph': 0.95, 'decrypt': 0.85,
             'the block': 0.9, 'bloomberg': 0.98, 'reuters': 0.98,
             'financial times': 0.95, 'wall street journal': 0.96,
-            'cryptopanic': 0.75, 'binance': 0.9, 'newsapi': 0.8,
-            'coingecko': 0.85, 'unknown': 0.6
+            'binance': 0.9, 'newsapi': 0.8, 'coingecko': 0.85,
+            'unknown': 0.6
         }
         
         source = news_item.get('source', 'unknown').lower()
@@ -173,7 +174,7 @@ class CryptoNewsTracker:
                 return news_items
             
             # البحث عن أخبار البيتكوين والعملات المشفرة
-            keywords = ['bitcoin', 'cryptocurrency', 'blockchain', 'binance']
+            keywords = ['bitcoin', 'cryptocurrency', 'blockchain', 'binance', 'crypto']
             for keyword in keywords:
                 url = f"https://newsapi.org/v2/everything?q={keyword}&sortBy=publishedAt&language=en&apiKey={newsapi_key}"
                 response = requests.get(url, timeout=15)
@@ -199,48 +200,30 @@ class CryptoNewsTracker:
         
         return news_items
     
-    def get_cryptopanic_news(self):
-        """جلب الأخبار من CryptoPanic"""
-        news_items = []
-        try:
-            crypto_panic_token = os.getenv('CRYPTO_PANIC_TOKEN', '')
-            url = f"https://cryptopanic.com/api/v1/posts/?auth_token={crypto_panic_token}&currencies=BTC,BNB"
-            response = requests.get(url, timeout=10)
-            data = response.json()
-            
-            for post in data.get('results', [])[:15]:
-                news_items.append({
-                    'title': post['title'],
-                    'source': post['source'].get('title', 'CryptoPanic') if post.get('source') else 'CryptoPanic',
-                    'url': post['url'],
-                    'published_at': post['published_at'],
-                    'content': post.get('title', ''),
-                    'votes': post.get('votes', {}),
-                    'api_source': 'cryptopanic'
-                })
-            
-            logger.info(f"تم جلب {len(news_items)} خبر من CryptoPanic")
-        except Exception as e:
-            logger.error(f"خطأ في جلب أخبار CryptoPanic: {e}")
-        
-        return news_items
-    
     def get_binance_news(self):
         """جلب أخبار Binance"""
         news_items = []
         try:
             url = "https://www.binance.com/en/support/announcement/c-48"
-            response = requests.get(url, timeout=10)
+            headers = {
+                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36'
+            }
+            response = requests.get(url, headers=headers, timeout=10)
             soup = BeautifulSoup(response.text, 'lxml')
             
-            news_cards = soup.find_all('a', href=re.compile(r'/en/support/announcement/'))
-            for card in news_cards[:10]:
-                title = card.get_text(strip=True)
+            # البحث عن عناصر الأخبار في Binance
+            news_elements = soup.select('.css-1ej4hfo a')
+            for element in news_elements[:10]:
+                title = element.get_text(strip=True)
                 if title and any(keyword in title.lower() for keyword in ['binance', 'bnb', 'bitcoin', 'btc', 'crypto']):
+                    href = element.get('href', '')
+                    if href and not href.startswith('http'):
+                        href = f"https://www.binance.com{href}"
+                    
                     news_items.append({
                         'title': title,
                         'source': 'Binance Announcements',
-                        'url': f"https://www.binance.com{card['href']}",
+                        'url': href,
                         'published_at': datetime.now().strftime('%Y-%m-%d %H:%M:%S'),
                         'content': title,
                         'api_source': 'binance'
@@ -257,18 +240,27 @@ class CryptoNewsTracker:
         news_items = []
         try:
             url = "https://www.coingecko.com/en/news"
-            response = requests.get(url, timeout=10)
+            headers = {
+                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36'
+            }
+            response = requests.get(url, headers=headers, timeout=10)
             soup = BeautifulSoup(response.text, 'lxml')
             
             # البحث عن عناصر الأخبار
-            news_elements = soup.select('.card .tw-flex-1 a')
+            news_elements = soup.select('[data-target="news-content.title"]')
             for element in news_elements[:10]:
                 title = element.get_text(strip=True)
                 if title and any(keyword in title.lower() for keyword in ['bitcoin', 'btc', 'binance', 'bnb', 'crypto']):
+                    # الحصول على رابط الخبر
+                    parent_link = element.find_parent('a')
+                    href = parent_link.get('href', '') if parent_link else ''
+                    if href and not href.startswith('http'):
+                        href = f"https://www.coingecko.com{href}"
+                    
                     news_items.append({
                         'title': title,
                         'source': 'CoinGecko',
-                        'url': f"https://www.coingecko.com{element['href']}",
+                        'url': href,
                         'published_at': datetime.now().strftime('%Y-%m-%d %H:%M:%S'),
                         'content': title,
                         'api_source': 'coingecko'
@@ -280,6 +272,80 @@ class CryptoNewsTracker:
         
         return news_items
     
+    def get_coindesk_news(self):
+        """جلب أخبار من CoinDesk"""
+        news_items = []
+        try:
+            url = "https://www.coindesk.com/"
+            headers = {
+                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36'
+            }
+            response = requests.get(url, headers=headers, timeout=10)
+            soup = BeautifulSoup(response.text, 'lxml')
+            
+            # البحث عن عناصر الأخبار الرئيسية
+            news_elements = soup.select('h1, h2, h3, h4, h5, h6')
+            for element in news_elements[:15]:
+                title = element.get_text(strip=True)
+                if title and len(title) > 20 and any(keyword in title.lower() for keyword in ['bitcoin', 'btc', 'binance', 'bnb', 'crypto', 'ether']):
+                    # الحصول على رابط الخبر
+                    parent_link = element.find_parent('a')
+                    href = parent_link.get('href', '') if parent_link else ''
+                    if href and not href.startswith('http'):
+                        href = f"https://www.coindesk.com{href}"
+                    
+                    news_items.append({
+                        'title': title,
+                        'source': 'CoinDesk',
+                        'url': href,
+                        'published_at': datetime.now().strftime('%Y-%m-%d %H:%M:%S'),
+                        'content': title,
+                        'api_source': 'coindesk'
+                    })
+            
+            logger.info(f"تم جلب {len(news_items)} خبر من CoinDesk")
+        except Exception as e:
+            logger.error(f"خطأ في جلب أخبار CoinDesk: {e}")
+        
+        return news_items
+    
+    def get_cointelegraph_news(self):
+        """جلب أخبار من CoinTelegraph"""
+        news_items = []
+        try:
+            url = "https://cointelegraph.com/"
+            headers = {
+                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36'
+            }
+            response = requests.get(url, headers=headers, timeout=10)
+            soup = BeautifulSoup(response.text, 'lxml')
+            
+            # البحث عن عناصر الأخبار
+            news_elements = soup.select('h1, h2, h3, h4, h5, h6')
+            for element in news_elements[:15]:
+                title = element.get_text(strip=True)
+                if title and len(title) > 20 and any(keyword in title.lower() for keyword in ['bitcoin', 'btc', 'binance', 'bnb', 'crypto', 'ether']):
+                    # الحصول على رابط الخبر
+                    parent_link = element.find_parent('a')
+                    href = parent_link.get('href', '') if parent_link else ''
+                    if href and not href.startswith('http'):
+                        href = f"https://cointelegraph.com{href}"
+                    
+                    news_items.append({
+                        'title': title,
+                        'source': 'CoinTelegraph',
+                        'url': href,
+                        'published_at': datetime.now().strftime('%Y-%m-%d %H:%M:%S'),
+                        'content': title,
+                        'api_source': 'cointelegraph'
+                    })
+            
+            logger.info(f"تم جلب {len(news_items)} خبر من CoinTelegraph")
+        except Exception as e:
+            logger.error(f"خطأ في جلب أخبار CoinTelegraph: {e}")
+        
+        return news_items
+    
     def get_crypto_news(self) -> List[Dict[str, Any]]:
         """جلب الأخبار من جميع المصادر المتاحة"""
         news_items = []
@@ -288,27 +354,25 @@ class CryptoNewsTracker:
         if self.news_sources.get('newsapi', True):
             news_items.extend(self.get_newsapi_news())
         
-        if self.news_sources.get('cryptopanic', True):
-            news_items.extend(self.get_cryptopanic_news())
-        
         if self.news_sources.get('binance', True):
             news_items.extend(self.get_binance_news())
         
         if self.news_sources.get('coingecko', True):
             news_items.extend(self.get_coingecko_news())
         
+        if self.news_sources.get('coindesk', True):
+            news_items.extend(self.get_coindesk_news())
+        
+        if self.news_sources.get('cointelegraph', True):
+            news_items.extend(self.get_cointelegraph_news())
+        
         # إزالة التكرارات بناء على العنوان
         unique_news = []
         seen_titles = set()
         
         for news in news_items:
-            # تنظيف العنوان وإزالة الروابط الخاصة بالتتبع
-            clean_title = re.sub(r'\s+', ' ', news['title']).strip()
-            clean_title = re.sub(r'-\s*$', '', clean_title).strip()
-            
-            if clean_title and clean_title not in seen_titles:
-                seen_titles.add(clean_title)
-                news['title'] = clean_title
+            if news['title'] and news['title'] not in seen_titles:
+                seen_titles.add(news['title'])
                 unique_news.append(news)
         
         logger.info(f"تم جمع {len(unique_news)} خبر فريد من جميع المصادر")
