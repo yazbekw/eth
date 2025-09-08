@@ -168,6 +168,7 @@ class Crypto_Trading_Bot:
         self.last_buy_contributions = {}
         self.last_sell_contributions = {}
         self.active_trailing_stops = {}  # لتتبع التريلينغ ستوب
+	    self.symbols = ["BNBUSDT", "ETHUSDT"]  #
         
         self.api_key = api_key or os.environ.get('BINANCE_API_KEY')
         self.api_secret = api_secret or os.environ.get('BINANCE_API_SECRET')
@@ -240,6 +241,29 @@ class Crypto_Trading_Bot:
             logger.error(f"خطأ في جلب الرصيد الابتدائي: {e}")
             self.initial_balance = 0
 
+    def start_trading(self, cycle_interval=300):
+        """بدء التداول التلقائي"""
+        logger.info(f"🚀 بدء التداول التلقائي - دورة كل {cycle_interval} ثانية")
+    
+        if self.notifier:
+            self.notifier.send_message(
+                f"🚀 <b>بدء التداول التلقائي</b>\n\n"
+                f"⏰ الفاصل الزمني: {cycle_interval} ثانية\n"
+                f"📊 الرصيد الابتدائي: ${self.initial_balance:.2f}\n"
+                f"🪙 العملات: {', '.join(self.symbols)}"
+            )
+    
+        while True:
+            try:
+                self.run_trading_cycle()
+                logger.info(f"⏳ انتظار {cycle_interval} ثانية للدورة القادمة...")
+                time.sleep(cycle_interval)
+            except Exception as e:
+                logger.error(f"❌ خطأ في التداول التلقائي: {e}")
+                if self.notifier:
+                    self.notifier.send_message(f"❌ <b>خطأ في التداول التلقائي:</b>\n{str(e)}")
+                time.sleep(60)  # انتظار دقيقة قبل إعادة المحاولة
+	
     def get_detailed_balance(self):
         """الحصول على الرصيد التفصيلي لكل عملة"""
         try:
@@ -1461,7 +1485,6 @@ class Crypto_Trading_Bot:
             if self.notifier:
                 self.notifier.send_message(f"❌ <b>خطأ في دورة التداول:</b>\n{str(e)}")
             
-
 def main():
     """الدالة الرئيسية لتشغيل البوت"""
     try:
@@ -1476,8 +1499,9 @@ def main():
         
     except Exception as e:
         logger.error(f"❌ خطأ في الدالة الرئيسية: {e}")
-        if 'bot' in locals() and bot.notifier:
+        if 'bot' in locals() and hasattr(bot, 'notifier') and bot.notifier:
             bot.notifier.send_message(f"❌ <b>فشل تشغيل البوت:</b>\n{str(e)}")
+
 
 if __name__ == "__main__":
     main()
