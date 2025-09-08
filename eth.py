@@ -155,6 +155,7 @@ class Crypto_Trading_Bot:
         self.trade_history = []
         self.performance_analyzer = PerformanceAnalyzer()
         self.load_trade_history()
+        self.last_buy_prices = {} 
         
         # إعدادات العتبات الجديدة
         self.BASELINE_BUY_THRESHOLD = 45  # رفع من 25 إلى 35
@@ -244,11 +245,19 @@ class Crypto_Trading_Bot:
     
         # التحقق من أخذ الربح (+1.5%)
         if current_price >= self.active_trailing_stops[symbol]['highest_price'] * 1.015:
-            return True  # أخذ الربح
+            # تنفيذ البيع بأخذ الربح
+            success, message = self.execute_sell_order(symbol, -100, "take_profit")
+            if success:
+                logger.info(f"تم أخذ الربح لـ {symbol} بالسعر {current_price}")
+            return True
     
         # التحقق من وقف الخسارة
         if current_price <= self.active_trailing_stops[symbol]['stop_price']:
-            return True  # وقف الخسارة
+            # تنفيذ البيع بوقف الخسارة
+            success, message = self.execute_sell_order(symbol, -100, "stop_loss")
+            if success:
+                logger.info(f"تم وقف الخسارة لـ {symbol} بالسعر {current_price}")
+            return True
     
         return False
 
@@ -1130,6 +1139,15 @@ class Crypto_Trading_Bot:
             
             # حساب السعر الفعلي مع الانزلاق
             executed_price = float(order['fills'][0]['price']) if order['fills'] else current_price
+
+            # إعداد التريلينغ ستوب بعد الشراء
+            self.active_trailing_stops[symbol] = {
+                'highest_price': executed_price,
+                'stop_price': executed_price * (1 - self.STOP_LOSS),
+                'buy_price': executed_price
+            }
+
+            self.last_buy_prices[symbol] = executed_price
             
             # إضافة سجل الصفقة
             self.add_trade_record(
@@ -1162,36 +1180,44 @@ class Crypto_Trading_Bot:
             logger.error(error_msg)
             return False, error_msg
 
-    def execute_sell_order(self, symbol, signal_strength):
+   def execute_sell_order(self, symbol, signal_strength, exit_type=None):
         """تنفيذ أمر بيع"""
         try:
             # التحقق من مساحة الأوامر أولاً
             if not self.manage_order_space(symbol):
                 return False, "لا توجد مساحة للأوامر الجديدة"
-            
+        
             # الحصول على رصيد العملة
-            balance = self.client.get_asset_balance(asset=symbol.replace('USDT', ''))
+            asset = symbol.replace('USDT', '')
+            balance = self.client.get_asset_balance(asset=asset)
             if not balance or float(balance['free']) <= 0:
                 return False, "لا يوجد رصيد كافٍ للبيع"
-            
+        
             quantity = float(balance['free'])
-            
+        
             # الحصول على السعر الحالي
             ticker = self.client.get_symbol_ticker(symbol=symbol)
             current_price = float(ticker['price'])
-            
+        
             # تنفيذ أمر السوق
             order = self.client.order_market_sell(
                 symbol=symbol,
                 quantity=quantity
             )
-            
+        
             # حساب السعر الفعلي مع الانزلاق
             executed_price = float(order['fills'][0]['price']) if order['fills'] else current_price
-            
+        
             # حساب حجم الصفقة
             trade_size = quantity * executed_price
-            
+        
+            # حساب الربح/الخسارة إذا كان هناك سعر شراء سابق
+            profit_loss = 0
+            if symbol in self.last_buy_prices:
+                buy_price = self.last_buy_prices[symbol]
+                profit_loss = (executed_price - buy_price) * quantity
+                del self.last_buy_prices[symbol]  # إزالة السعر بعد البيع
+        
             # إضافة سجل الصفقة
             self.add_trade_record(
                 symbol=symbol,
@@ -1200,39 +1226,47 @@ class Crypto_Trading_Bot:
                 price=executed_price,
                 trade_size=trade_size,
                 signal_strength=signal_strength,
-                order_id=order['orderId']
+                order_id=order['orderId'],
+                profit_loss=profit_loss,
+                exit_type=exit_type
             )
-
-            # في execute_sell_order عند البيع بالتريلينغ ستوب
-            
-           if signal_strength == -100:
+         
+            # إزالة التريلينغ ستوب إذا كان موجوداً
+            if symbol in self.active_trailing_stops:
+                del self.active_trailing_stops[symbol]
+         
+            # إنشاء الرسالة بناءً على نوع البيع
+            if exit_type == "trailing_stop":
                 message = (
                     f"🔄 <b>بيع بالتريلينغ ستوب</b>\n\n"
                     f"العملة: {symbol}\n"
                     f"الكمية: {quantity:.6f}\n"
                     f"السعر: ${executed_price:.4f}\n"
+                    f"حجم الصفقة: ${trade_size:.2f}\n"
+                    f"الربح/الخسارة: ${profit_loss:.2f}\n"
                     f"السبب: وقف خسارة أو أخذ ربح تلقائي"
                 )
-        else:
-             message = (
-                f"✅ <b>تم تنفيذ أمر بيع</b>\n\n"
-                f"العملة: {symbol}\n"
-                f"الكمية: {quantity:.6f}\n"
-                f"السعر: ${executed_price:.4f}\n"
-                f"حجم الصفقة: ${trade_size:.2f}\n"
-                f"قوة الإشارة: {signal_strength:.1f}%\n"
-                f"وقت التنفيذ: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}"
-            )
-            
+            else:
+                message = (
+                    f"✅ <b>تم تنفيذ أمر بيع</b>\n\n"
+                    f"العملة: {symbol}\n"
+                    f"الكمية: {quantity:.6f}\n"
+                    f"السعر: ${executed_price:.4f}\n"
+                    f"حجم الصفقة: ${trade_size:.2f}\n"
+                    f"قوة الإشارة: {signal_strength:.1f}%\n"
+                    f"الربح/الخسارة: ${profit_loss:.2f}\n"
+                    f"وقت التنفيذ: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}"
+                )
+        
             self.send_notification(message)
-            
+        
             return True, "تم تنفيذ أمر البيع بنجاح"
-            
+        
         except Exception as e:
             error_msg = f"❌ خطأ في تنفيذ أمر البيع لـ {symbol}: {e}"
             logger.error(error_msg)
             return False, error_msg
-
+        
     def run_trading_cycle(self):
         """تشغيل دورة تداول كاملة"""
         try:
