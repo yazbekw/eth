@@ -169,6 +169,14 @@ class Crypto_Trading_Bot:
         self.last_sell_contributions = {}
         self.active_trailing_stops = {}  # لتتبع التريلينغ ستوب
         self.symbols = ["BNBUSDT", "ETHUSDT"]  #
+
+        self.MIN_TRADE_SIZE = 5  # ← أضف هذا
+        self.MAX_TRADE_SIZE = 50  # ← أضف هذا
+        self.MAX_ALGO_ORDERS = 10  # ← أضف هذا
+        self.fee_rate = 0.0005  # ← أضف هذا
+        self.slippage = 0.00015  # ← أضف هذا
+        self.STOP_LOSS = 0.02  # ← أضف هذا
+        self.MAX_POSITION_SIZE = 0.5
         
         self.api_key = api_key or os.environ.get('BINANCE_API_KEY')
         self.api_secret = api_secret or os.environ.get('BINANCE_API_SECRET')
