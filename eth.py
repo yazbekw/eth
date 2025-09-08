@@ -1186,31 +1186,31 @@ class Crypto_Trading_Bot:
             # التحقق من مساحة الأوامر أولاً
             if not self.manage_order_space(symbol):
                 return False, "لا توجد مساحة للأوامر الجديدة"
-        
+    
             # الحصول على رصيد العملة
             asset = symbol.replace('USDT', '')
             balance = self.client.get_asset_balance(asset=asset)
             if not balance or float(balance['free']) <= 0:
                 return False, "لا يوجد رصيد كافٍ للبيع"
-        
+    
             quantity = float(balance['free'])
-        
+    
             # الحصول على السعر الحالي
             ticker = self.client.get_symbol_ticker(symbol=symbol)
             current_price = float(ticker['price'])
-        
+    
             # تنفيذ أمر السوق
             order = self.client.order_market_sell(
                 symbol=symbol,
                 quantity=quantity
             )
-        
+    
             # حساب السعر الفعلي مع الانزلاق
             executed_price = float(order['fills'][0]['price']) if order['fills'] else current_price
-        
+    
             # حساب حجم الصفقة
             trade_size = quantity * executed_price
-        
+    
             # حساب الربح/الخسارة إذا كان هناك سعر شراء سابق
             profit_loss = 0
             if symbol in self.last_buy_prices:
@@ -1230,7 +1230,7 @@ class Crypto_Trading_Bot:
                 profit_loss=profit_loss,
                 exit_type=exit_type
             )
-         
+     
             # إزالة التريلينغ ستوب إذا كان موجوداً
             if symbol in self.active_trailing_stops:
                 del self.active_trailing_stops[symbol]
@@ -1257,11 +1257,11 @@ class Crypto_Trading_Bot:
                     f"الربح/الخسارة: ${profit_loss:.2f}\n"
                     f"وقت التنفيذ: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}"
                 )
-        
+    
             self.send_notification(message)
-        
+    
             return True, "تم تنفيذ أمر البيع بنجاح"
-        
+    
         except Exception as e:
             error_msg = f"❌ خطأ في تنفيذ أمر البيع لـ {symbol}: {e}"
             logger.error(error_msg)
