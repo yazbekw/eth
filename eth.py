@@ -161,6 +161,9 @@ class Crypto_Trading_Bot:
         self.STRICT_BUY_THRESHOLD = 55    # رفع من 20 إلى 45 (للأوامر الممتلئة)
         self.SELL_THRESHOLD = 35       # عتبة البيع تبقى كما هي
 
+        self.active_trailing_stops = {}  # لتتبع التريلينغ ستوب
+
+
         self.last_buy_contributions = {}
         self.last_sell_contributions = {}
         self.active_trailing_stops = {}  # لتتبع التريلينغ ستوب
@@ -232,11 +235,6 @@ class Crypto_Trading_Bot:
    
     def update_trailing_stops(self, symbol, current_price):
         if symbol not in self.active_trailing_stops:
-            # بدء تريلينغ ستوب جديد
-            self.active_trailing_stops[symbol] = {
-                'highest_price': current_price,
-                'stop_price': current_price * (1 - self.STOP_LOSS)
-            }
             return False
     
         # تحديث أعلى سعر وأخذ الربح
@@ -1207,16 +1205,16 @@ class Crypto_Trading_Bot:
 
             # في execute_sell_order عند البيع بالتريلينغ ستوب
             
-            if signal_strength == -100:
-            message = (
-                f"🔄 <b>بيع بالتريلينغ ستوب</b>\n\n"
-                f"العملة: {symbol}\n"
-                f"الكمية: {quantity:.6f}\n"
-                f"السعر: ${executed_price:.4f}\n"
-                f"السبب: وقف خسارة أو أخذ ربح تلقائي"
-            )
+           if signal_strength == -100:
+                message = (
+                    f"🔄 <b>بيع بالتريلينغ ستوب</b>\n\n"
+                    f"العملة: {symbol}\n"
+                    f"الكمية: {quantity:.6f}\n"
+                    f"السعر: ${executed_price:.4f}\n"
+                    f"السبب: وقف خسارة أو أخذ ربح تلقائي"
+                )
         else:
-            message = (
+             message = (
                 f"✅ <b>تم تنفيذ أمر بيع</b>\n\n"
                 f"العملة: {symbol}\n"
                 f"الكمية: {quantity:.6f}\n"
