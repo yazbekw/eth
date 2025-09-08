@@ -1292,66 +1292,7 @@ class Crypto_Trading_Bot:
             error_msg = f"❌ خطأ في تنفيذ أمر البيع لـ {symbol}: {e}"
             logger.error(error_msg)
             return False, error_msg
-        
-    def run_trading_cycle(self):
-        """تشغيل دورة تداول كاملة"""
-        try:
-            logger.info("="*50)
-            logger.info(f"بدء دورة التداول - {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
-        
-            # التحقق من حد الخسارة اليومي
-            current_balance = self.get_real_balance()
-            trading_enabled, daily_loss_pct = self.performance_analyzer.check_daily_loss_limit(current_balance)
-        
-            if not trading_enabled:
-                message = (
-                    f"⛔ <b>تم إيقاف التداول اليومي</b>\n\n"
-                    f"الخسارة اليومية: {daily_loss_pct*100:.2f}%\n"
-                    f"تجاوز حد الخسارة المسموح به (2%)\n"
-                    f"سيستأنف التداول تلقائياً غداً"
-                )
-                self.send_notification(message)
-                logger.warning("تم إيقاف التداول بسبب تجاوز حد الخسارة اليومي")
-                return
-
-            # تحديث وقف الخسارة المتابع
-            for symbol in self.symbols:
-                try:
-                    ticker = self.client.get_symbol_ticker(symbol=symbol)
-                    current_price = float(ticker['price'])
-                    if self.update_trailing_stops(symbol, current_price):
-                        # تم تفعيل وقف الخسارة - execute بيع
-                        self.execute_sell_order(symbol, 100)  # تصحيح المعامل
-                except Exception as e:
-                    logger.error(f"خطأ في التريلينغ ستوب لـ {symbol}: {e}")
-        
-            # تحليل كل عملة
-            for symbol in self.symbols:
-                try:
-                    logger.info(f"تحليل {symbol}...")
-                
-                    # جلب البيانات التاريخية
-                    data = self.get_historical_data(symbol)
-                    if data is None or len(data) < 50:
-                        logger.warning(f"بيانات غير كافية لـ {symbol}")
-                        continue
-                
-                    # حساب المؤشرات الفنية
-                    data = self.calculate_technical_indicators(data)
-                    
-                    # حساب قوة الإشارة
-                    buy_signal = self.calculate_signal_strength(data, 'buy')
-                    sell_signal = self.calculate_signal_strength(data, 'sell')
-
-                    current_price = data['close'].iloc[-1]
-                    key_level = self.check_key_levels(symbol, current_price, data)
-
-                    logger.info(f"{symbol} - إشارة الشراء: {buy_signal:.1f}%, إشارة البيع: {sell_signal:.1f}%")
-                
-                    # منع الشراء عند المقاومة
-                    if buy_signal >= self.BASELINE_BUY_THRESHOLD:
-                        if key_level == "near_resistance":
-                            # 
+    
 
     def run_trading_cycle(self):
         """تشغيل دورة تداول كاملة"""
