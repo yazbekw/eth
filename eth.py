@@ -1293,11 +1293,10 @@ class Crypto_Trading_Bot:
             logger.error(error_msg)
             return False, error_msg
     
-
     def run_trading_cycle(self):
         """تشغيل دورة تداول كاملة"""
         try:
-            logger.info("="*50)
+            logger.info("=" * 50)
             logger.info(f"بدء دورة التداول - {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
         
             # التحقق من حد الخسارة اليومي
@@ -1307,7 +1306,7 @@ class Crypto_Trading_Bot:
             if not trading_enabled:
                 message = (
                     f"⏸️ <b>تم إيقاف التداول اليومي</b>\n\n"
-                    f"الخسارة اليومية: {daily_loss_pct*100:.2f}%\n"
+                    f"الخسارة اليومية: {daily_loss_pct * 100:.2f}%\n"
                     f"تجاوز حد الخسارة المسموح به (2%)\n"
                     f"سيستأنف التداول تلقائياً غداً"
                 )
@@ -1367,7 +1366,7 @@ class Crypto_Trading_Bot:
                             skip_message = f"⏭️ تخطي الشراء - قريب من المقاومة ({distance_pct:.2f}%)"
                             logger.info(skip_message)
                             action_taken = f"❌ تخطي شراء: قريب من المقاومة ({distance_pct:.2f}% تحت)"
-                        
+                    
                         else:
                             # شرط إضافي للأوامر الممتلئة
                             order_status = self.get_order_space_status(symbol)
@@ -1375,7 +1374,7 @@ class Crypto_Trading_Bot:
                                 skip_message = f"⏭️ تخطي الشراء - إشارة غير قوية كفاية"
                                 logger.info(skip_message)
                                 action_taken = "❌ تخطي شراء: إشارة ضعيفة للأوامر الممتلئة"
-                            
+                        
                             else:
                                 success, message = self.execute_buy_order(symbol, buy_signal)
                                 logger.info(f"نتيجة أمر الشراء: {message}")
@@ -1392,7 +1391,7 @@ class Crypto_Trading_Bot:
                             skip_message = f"⏭️ تخطي البيع - قريب من الدعم ({distance_pct:.2f}%)"
                             logger.info(skip_message)
                             action_taken = f"❌ تخطي بيع: قريب من الدعم ({distance_pct:.2f}% فوق)"
-                        
+                    
                         else:
                             # شرط إضافي للأوامر الممتلئة
                             order_status = self.get_order_space_status(symbol)
@@ -1400,7 +1399,7 @@ class Crypto_Trading_Bot:
                                 skip_message = f"⏭️ تخطي البيع - إشارة غير قوية كفاية"
                                 logger.info(skip_message)
                                 action_taken = "❌ تخطي بيع: إشارة ضعيفة للأوامر الممتلئة"
-                            
+                        
                             else:
                                 success, message = self.execute_sell_order(symbol, sell_signal)
                                 logger.info(f"نتيجة أمر البيع: {message}")
@@ -1451,16 +1450,17 @@ class Crypto_Trading_Bot:
                     f"⏰ الوقت: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}\n"
                     f"💰 الرصيد: ${current_balance:.2f}\n"
                     f"🔢 الأوامر النشطة: {self.get_total_orders_count()}"
-                )
+				)
                 self.notifier.send_message(summary_msg)
         
-        logger.info(f"انتهت دورة التداول - {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
-        logger.info("="*50)
+            logger.info(f"انتهت دورة التداول - {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
+            logger.info("=" * 50)
         
-    except Exception as e:
-        logger.error(f"❌ خطأ في دورة التداول: {e}")
-        if self.notifier:
-            self.notifier.send_message(f"❌ <b>خطأ في دورة التداول:</b>\n{str(e)}")
+        except Exception as e:
+            logger.error(f"❌ خطأ في دورة التداول: {e}")
+            if self.notifier:
+                self.notifier.send_message(f"❌ <b>خطأ في دورة التداول:</b>\n{str(e)}")
+            
 
 def main():
     """الدالة الرئيسية لتشغيل البوت"""
