@@ -231,23 +231,27 @@ class Crypto_Trading_Bot:
 
    
     def update_trailing_stops(self, symbol, current_price):
-        if current_price >= self.active_trailing_stops[symbol]['highest_price'] * 1.015:  # +1.5%
-            return True  # أخذ الربح
         if symbol not in self.active_trailing_stops:
             # بدء تريلينغ ستوب جديد
             self.active_trailing_stops[symbol] = {
                 'highest_price': current_price,
                 'stop_price': current_price * (1 - self.STOP_LOSS)
             }
-        else:
-            # تحديث أعلى سعر
-            if current_price > self.active_trailing_stops[symbol]['highest_price']:
-                self.active_trailing_stops[symbol]['highest_price'] = current_price
-                self.active_trailing_stops[symbol]['stop_price'] = current_price * (1 - self.STOP_LOSS)
-        
-            # التحقق إذا تم触发 وقف الخسارة
-            if current_price <= self.active_trailing_stops[symbol]['stop_price']:
-                return True  # trigger البيع
+            return False
+    
+        # تحديث أعلى سعر وأخذ الربح
+        if current_price > self.active_trailing_stops[symbol]['highest_price']:
+            self.active_trailing_stops[symbol]['highest_price'] = current_price
+            self.active_trailing_stops[symbol]['stop_price'] = current_price * (1 - self.STOP_LOSS)
+    
+        # التحقق من أخذ الربح (+1.5%)
+        if current_price >= self.active_trailing_stops[symbol]['highest_price'] * 1.015:
+            return True  # أخذ الربح
+    
+        # التحقق من وقف الخسارة
+        if current_price <= self.active_trailing_stops[symbol]['stop_price']:
+            return True  # وقف الخسارة
+    
         return False
 
     def load_trade_history(self):
@@ -1202,16 +1206,16 @@ class Crypto_Trading_Bot:
             )
 
             # في execute_sell_order عند البيع بالتريلينغ ستوب
-            if signal_strength == -100:  # بيع بالتريلينغ ستوب
-                message = (
-                    f"🔄 <b>بيع بالتريلينغ ستوب</b>\n\n"
-                    f"العملة: {symbol}\n"
-                    f"الكمية: {quantity:.6f}\n"
-                    f"السعر: ${executed_price:.4f}\n"
-                    f"السبب: وقف خسارة أو أخذ ربح تلقائي"
-                )
             
-            # إرسال إشعار
+            if signal_strength == -100:
+            message = (
+                f"🔄 <b>بيع بالتريلينغ ستوب</b>\n\n"
+                f"العملة: {symbol}\n"
+                f"الكمية: {quantity:.6f}\n"
+                f"السعر: ${executed_price:.4f}\n"
+                f"السبب: وقف خسارة أو أخذ ربح تلقائي"
+            )
+        else:
             message = (
                 f"✅ <b>تم تنفيذ أمر بيع</b>\n\n"
                 f"العملة: {symbol}\n"
