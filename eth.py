@@ -1,3 +1,7 @@
+هل التعديلات صحيح؟
+ماذا اعدل ايضا واين؟
+
+
 import os
 import pandas as pd
 import numpy as np
@@ -188,6 +192,8 @@ class Crypto_Trading_Bot:
         self.slippage = 0.00015
         self.trades = []
         self.symbols = ["BNBUSDT", "ETHUSDT"]  # إضافة ETH إلى العملات المتداولة
+        self.STOP_LOSS = 0.02
+        self.MAX_POSITION_SIZE = 0.5
         
         # إعدادات إدارة الأوامر
         self.MAX_ALGO_ORDERS = 10
@@ -225,6 +231,37 @@ class Crypto_Trading_Bot:
         except Exception as e:
             logger.error(f"خطأ في جلب الرصيد الابتدائي: {e}")
             self.initial_balance = 0
+
+    def update_trailing_stops(self, symbol, current_price):
+        if symbol not in self.active_trailing_stops:
+
+        # أضف هذا قبل loop العملات (around line 870)
+        for symbol in self.symbols:
+            # التحقق من التريلينغ ستوب أولاً
+            try:
+                ticker = self.client.get_symbol_ticker(symbol=symbol)
+                current_price = float(ticker['price'])
+                if self.update_trailing_stops(symbol, current_price):
+                    # تم触发 وقف الخسارة - execute بيع
+                    self.execute_sell_order(symbol, -100)  # بيع بقوة إشارة عالية
+            except Exception as e:
+                logger.error(f"خطأ في التريلينغ ستوب لـ {symbol}: {e}")
+                
+            # بدء تريلينغ ستوب جديد
+            self.active_trailing_stops[symbol] = {
+                'highest_price': current_price,
+                'stop_price': current_price * (1 - self.STOP_LOSS)
+            }
+        else:
+            # تحديث أعلى سعر
+            if current_price > self.active_trailing_stops[symbol]['highest_price']:
+                self.active_trailing_stops[symbol]['highest_price'] = current_price
+                self.active_trailing_stops[symbol]['stop_price'] = current_price * (1 - self.STOP_LOSS)
+        
+            # التحقق إذا تم觸發 وقف الخسارة
+            if current_price <= self.active_trailing_stops[symbol]['stop_price']:
+                return True  # trigger البيع
+        return False
 
     def load_trade_history(self):
         """تحميل تاريخ الصفقات من ملف"""
@@ -335,6 +372,19 @@ class Crypto_Trading_Bot:
         except Exception as e:
             logger.error(f"خطأ في إنشاء تقرير التداول: {e}")
             return {"error": str(e)}
+
+    def check_key_levels(self, symbol, current_price, data):
+        # التحقق من القمم والقيعان
+        resistance = data['bb_upper'].iloc[-1]
+        support = data['bb_lower'].iloc[-1]
+    
+        # إذا near resistance - avoid buying
+        if current_price > resistance * 0.98:
+            return "near_resistance"
+        # إذا near support - avoid selling
+        elif current_price < support * 1.02:
+            return "near_support"
+        return "neutral"
 
     def generate_daily_performance_report(self):
         """إنشاء تقرير أداء يومي شامل"""
@@ -653,6 +703,14 @@ class Crypto_Trading_Bot:
     def calculate_signal_strength(self, data, signal_type='buy'):
         """تقييم قوة الإشارة من -100 إلى +100% مع نظام التصويت"""
         latest = data.iloc[-1]
+
+        # منع الشراء في ذروة الشراء
+        if signal_type == 'buy' and latest['rsi'] > 65:
+            return -100  # لا تشتري أبداً
+        
+        # منع البيع في ذروة البيع  
+        if signal_type == 'sell' and latest['rsi'] < 35:
+            return -100  # لا تبيع أبداً
         
         # نظام التصويت
         votes = {
@@ -996,8 +1054,26 @@ class Crypto_Trading_Bot:
             logger.error(f"❌ خطأ في حساب المؤشرات الفنية: {e}")
             return data
 
+    
     def determine_trade_size(self, signal_strength, symbol):
-        """تحديد حجم الصفقة بناء على قوة الإشارة"""
+        # التحقق من عدم تجاوز الحد الأقصى
+        current_balance = self.get_real_balance()
+        asset = symbol.replace('USDT', '')
+    
+        # الحصول على القيمة الحالية للعملة
+        try:
+            balance = self.client.get_asset_balance(asset=asset)
+            if balance and float(balance['free']) > 0:
+                ticker = self.client.get_symbol_ticker(symbol=symbol)
+                current_price = float(ticker['price'])
+                current_value = float(balance['free']) * current_price
+            
+                # إذا تجاوز الحد المسموح
+                if current_value > current_balance * self.MAX_POSITION_SIZE:
+                    return 0, 0  # لا تشتري أكثر
+        except:
+            pass
+        
         try:
             # تحويل قوة الإشارة إلى نسبة مئوية مطلقة
             strength_percentage = abs(signal_strength) / 100.0
@@ -1196,6 +1272,19 @@ class Crypto_Trading_Bot:
                     # حساب قوة إشارة الشراء والبيع
                     buy_signal = self.calculate_signal_strength(data, 'buy')
                     sell_signal = self.calculate_signal_strength(data, 'sell')
+
+                    current_price = data['close'].iloc[-1]
+                    key_level = self.check_key_levels(symbol, current_price, data)
+
+                    # منع الشراء عند المقاومة
+                    if buy_signal >= self.BASELINE_BUY_THRESHOLD and key_level == "near_resistance":
+                        logger.info(f"تخطي الشراء - near resistance: {current_price}")
+                        continue
+
+                   # منع البيع عند الدعم
+                   if sell_signal >= self.SELL_THRESHOLD and key_level == "near_support":
+                       logger.info(f"تخطي البيع - near support: {current_price}")
+                       continue
                     
                     logger.info(f"{symbol} - إشارة الشراء: {buy_signal:.1f}%, إشارة البيع: {sell_signal:.1f}%")
                     
