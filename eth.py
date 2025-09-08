@@ -1312,7 +1312,7 @@ class Crypto_Trading_Bot:
                 
                     # حساب المؤشرات الفنية
                     data = self.calculate_technical_indicators(data)
-                
+                    
                     # حساب قوة الإشارة
                     buy_signal = self.calculate_signal_strength(data, 'buy')
                     sell_signal = self.calculate_signal_strength(data, 'sell')
@@ -1325,30 +1325,40 @@ class Crypto_Trading_Bot:
                     # منع الشراء عند المقاومة
                     if buy_signal >= self.BASELINE_BUY_THRESHOLD:
                         if key_level == "near_resistance":
-                            logger.info(f"تخطي الشراء - near resistance: {current_price}")
+                            # استبدال الرسالة القديمة بالجديدة
+                            skip_message = f"⏭️ تخطي الشراء لـ {symbol} near resistance: ${current_price:.2f}"
+                            logger.info(skip_message)
+                            self.send_notification(skip_message)
                             continue
                     
                         # شرط إضافي للأوامر الممتلئة
                         order_status = self.get_order_space_status(symbol)
                         if order_status == "NEAR_FULL" and buy_signal < self.STRICT_BUY_THRESHOLD:
-                            logger.info(f"تخطي الشراء - إشارة غير قوية كفاية: {buy_signal:.1f}% < {self.STRICT_BUY_THRESHOLD}%")
+                            skip_message = f"⏭️ تخطي الشراء لـ {symbol} - إشارة غير قوية كفاية: {buy_signal:.1f}% < {self.STRICT_BUY_THRESHOLD}%"
+                            logger.info(skip_message)
+                            self.send_notification(skip_message)
                             continue
-                        
+                    
                         success, message = self.execute_buy_order(symbol, buy_signal)
                         logger.info(f"نتيجة أمر الشراء: {message}")
-                    
+                
                     # منع البيع عند الدعم
                     elif sell_signal >= self.SELL_THRESHOLD:
                         if key_level == "near_support":
-                            logger.info(f"تخطي البيع - near support: {current_price}")
+                            # استبدال الرسالة القديمة بالجديدة
+                            skip_message = f"⏭️ تخطي البيع لـ {symbol} near support: ${current_price:.2f}"
+                            logger.info(skip_message)
+                            self.send_notification(skip_message)
                             continue
-                    
+                        
                         # شرط إضافي للأوامر الممتلئة
                         order_status = self.get_order_space_status(symbol)
                         if order_status == "NEAR_FULL" and sell_signal < (self.SELL_THRESHOLD + 10):
-                            logger.info(f"تخطي البيع - إشارة غير قوية كفاية: {sell_signal:.1f}% < {self.SELL_THRESHOLD + 10}%")
+                            skip_message = f"⏭️ تخطي البيع لـ {symbol} - إشارة غير قوية كفاية: {sell_signal:.1f}% < {self.SELL_THRESHOLD + 10}%"
+                            logger.info(skip_message)
+                            self.send_notification(skip_message)
                             continue
-                        
+                    
                         success, message = self.execute_sell_order(symbol, sell_signal)
                         logger.info(f"نتيجة أمر البيع: {message}")
                 
