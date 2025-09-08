@@ -1454,8 +1454,8 @@ class Crypto_Trading_Bot:
                 )
                 self.notifier.send_message(summary_msg)
         
-            logger.info(f"انتهت دورة التداول - {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
-            logger.info("="*50)
+        logger.info(f"انتهت دورة التداول - {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
+        logger.info("="*50)
         
     except Exception as e:
         logger.error(f"❌ خطأ في دورة التداول: {e}")
