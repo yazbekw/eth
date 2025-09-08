@@ -158,9 +158,9 @@ class Crypto_Trading_Bot:
         self.last_buy_prices = {} 
         
         # إعدادات العتبات الجديدة
-        self.BASELINE_BUY_THRESHOLD = 45  # رفع من 25 إلى 35
-        self.STRICT_BUY_THRESHOLD = 55    # رفع من 20 إلى 45 (للأوامر الممتلئة)
-        self.SELL_THRESHOLD = 35       # عتبة البيع تبقى كما هي
+        self.BASELINE_BUY_THRESHOLD = 55 # رفع من 25 إلى 35
+        self.STRICT_BUY_THRESHOLD = 65   # رفع من 20 إلى 45 (للأوامر الممتلئة)
+        self.SELL_THRESHOLD = 45     # عتبة البيع تبقى كما هي
 
         self.active_trailing_stops = {}  # لتتبع التريلينغ ستوب
 
@@ -1457,10 +1457,10 @@ class Crypto_Trading_Bot:
             logger.info(f"انتهت دورة التداول - {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
             logger.info("="*50)
         
-except Exception as e:
-    logger.error(f"❌ خطأ في دورة التداول: {e}")
-    if self.notifier:
-        self.notifier.send_message(f"❌ <b>خطأ في دورة التداول:</b>\n{str(e)}")
+    except Exception as e:
+        logger.error(f"❌ خطأ في دورة التداول: {e}")
+        if self.notifier:
+            self.notifier.send_message(f"❌ <b>خطأ في دورة التداول:</b>\n{str(e)}")
 
 def main():
     """الدالة الرئيسية لتشغيل البوت"""
