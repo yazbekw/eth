@@ -213,27 +213,53 @@ class Crypto_Trading_Bot:
         try:
             self.initial_balance = self.get_real_balance()
             self.performance_analyzer.daily_start_balance = self.initial_balance
+        
+            # الحصول على الرصيد التفصيلي
+            detailed_balance = self.get_detailed_balance()
+            balance_details = "\n".join(detailed_balance)
+        
             success_msg = f"✅ تم تهيئة البوت بنجاح - الرصيد الابتدائي: ${self.initial_balance:.2f}"
             logger.info(success_msg)
+        
             if self.notifier:
                 self.notifier.send_message(
                     f"🤖 <b>بدء تشغيل بوت تداول العملات المشفرة المحسن</b>\n\n"
                     f"{success_msg}\n"
-                    f"العملات المتداولة: BNB, ETH\n"
-                    f"نطاق حجم الصفقة: ${self.MIN_TRADE_SIZE}-${self.MAX_TRADE_SIZE}\n"
-                    f"الحد الأقصى للأوامر: {self.MAX_ALGO_ORDERS}\n"
-                    f"عتبة الشراء الأساسية: {self.BASELINE_BUY_THRESHOLD}%\n"
-                    f"عتبة الشراء المشددة: {self.STRICT_BUY_THRESHOLD}%\n"
-                    f"عتبة البيع: {self.SELL_THRESHOLD}%\n"
-                    f"حد الخسارة اليومي: 2%\n"
-                    f"نظام التصويت: مفعل مع مؤشر ADX\n"
-                    f"التريلينغ ستوب: مفعل"
+                    f"📊 <b>الرصيد التفصيلي:</b>\n{balance_details}\n\n"
+                    f"🪙 العملات المتداولة: BNB, ETH\n"
+                    f"📦 نطاق حجم الصفقة: ${self.MIN_TRADE_SIZE}-${self.MAX_TRADE_SIZE}\n"
+                    f"🔢 الحد الأقصى للأوامر: {self.MAX_ALGO_ORDERS}\n"
+                    f"🟢 عتبة الشراء الأساسية: {self.BASELINE_BUY_THRESHOLD}%\n"
+                    f"🟡 عتبة الشراء المشددة: {self.STRICT_BUY_THRESHOLD}%\n"
+                    f"🔴 عتبة البيع: {self.SELL_THRESHOLD}%\n"
+                    f"⛔ حد الخسارة اليومي: 2%\n"
+                    f"🗳️ نظام التصويت: مفعل مع مؤشر ADX\n"
+                    f"📉 التريلينغ ستوب: مفعل"
                 )
         except Exception as e:
             logger.error(f"خطأ في جلب الرصيد الابتدائي: {e}")
             self.initial_balance = 0
 
-   
+    def get_detailed_balance(self):
+        """الحصول على الرصيد التفصيلي لكل عملة"""
+        try:
+            account = self.client.get_account()
+            detailed_balance = []
+        
+            for asset in account['balances']:
+                free = float(asset['free'])
+                locked = float(asset['locked'])
+                total = free + locked
+            
+                if total > 0:  # عرض فقط العملات التي لها رصيد
+                    detailed_balance.append(f"{asset['asset']}: {total:.8f} (free: {free:.8f}, locked: {locked:.8f})")
+        
+            return detailed_balance
+        
+        except Exception as e:
+            logger.error(f"خطأ في جلب الرصيد التفصيلي: {e}")
+            return ["غير متوفر"]
+
     def update_trailing_stops(self, symbol, current_price):
         if symbol not in self.active_trailing_stops:
             return False
@@ -1383,13 +1409,18 @@ class Crypto_Trading_Bot:
     def start_trading(self, cycle_interval=300):
         """بدء التداول المستمر"""
         logger.info("🚀 بدء التداول الآلي...")
-        
+    
         if self.notifier:
+            # الحصول على الرصيد التفصيلي
+            detailed_balance = self.get_detailed_balance()
+            balance_details = "\n".join(detailed_balance)
+        
             self.notifier.send_message(
                 f"🚀 <b>بدء التداول الآلي</b>\n\n"
                 f"⏰ الوقت: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}\n"
-                f"💰 الرصيد الابتدائي: ${self.initial_balance:.2f}\n"
-                f"📊 العملات: {', '.join(self.symbols)}\n"
+                f"💰 الرصيد الإجمالي: ${self.initial_balance:.2f}\n"
+                f"📊 <b>الرصيد التفصيلي:</b>\n{balance_details}\n\n"
+                f"🪙 العملات: {', '.join(self.symbols)}\n"
                 f"🔄 فاصل الدورات: {cycle_interval} ثانية\n"
                 f"🤖 البوت يعمل بنجاح!"
             )
