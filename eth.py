@@ -1,6 +1,3 @@
-هل التعديلات صحيح؟
-ماذا اعدل ايضا واين؟
-
 
 import os
 import pandas as pd
@@ -232,21 +229,11 @@ class Crypto_Trading_Bot:
             logger.error(f"خطأ في جلب الرصيد الابتدائي: {e}")
             self.initial_balance = 0
 
+   
     def update_trailing_stops(self, symbol, current_price):
+        if current_price >= self.active_trailing_stops[symbol]['highest_price'] * 1.015:  # +1.5%
+            return True  # أخذ الربح
         if symbol not in self.active_trailing_stops:
-
-        # أضف هذا قبل loop العملات (around line 870)
-        for symbol in self.symbols:
-            # التحقق من التريلينغ ستوب أولاً
-            try:
-                ticker = self.client.get_symbol_ticker(symbol=symbol)
-                current_price = float(ticker['price'])
-                if self.update_trailing_stops(symbol, current_price):
-                    # تم触发 وقف الخسارة - execute بيع
-                    self.execute_sell_order(symbol, -100)  # بيع بقوة إشارة عالية
-            except Exception as e:
-                logger.error(f"خطأ في التريلينغ ستوب لـ {symbol}: {e}")
-                
             # بدء تريلينغ ستوب جديد
             self.active_trailing_stops[symbol] = {
                 'highest_price': current_price,
@@ -258,7 +245,7 @@ class Crypto_Trading_Bot:
                 self.active_trailing_stops[symbol]['highest_price'] = current_price
                 self.active_trailing_stops[symbol]['stop_price'] = current_price * (1 - self.STOP_LOSS)
         
-            # التحقق إذا تم觸發 وقف الخسارة
+            # التحقق إذا تم触发 وقف الخسارة
             if current_price <= self.active_trailing_stops[symbol]['stop_price']:
                 return True  # trigger البيع
         return False
@@ -1213,6 +1200,16 @@ class Crypto_Trading_Bot:
                 signal_strength=signal_strength,
                 order_id=order['orderId']
             )
+
+            # في execute_sell_order عند البيع بالتريلينغ ستوب
+            if signal_strength == -100:  # بيع بالتريلينغ ستوب
+                message = (
+                    f"🔄 <b>بيع بالتريلينغ ستوب</b>\n\n"
+                    f"العملة: {symbol}\n"
+                    f"الكمية: {quantity:.6f}\n"
+                    f"السعر: ${executed_price:.4f}\n"
+                    f"السبب: وقف خسارة أو أخذ ربح تلقائي"
+                )
             
             # إرسال إشعار
             message = (
@@ -1254,6 +1251,16 @@ class Crypto_Trading_Bot:
                 self.send_notification(message)
                 logger.warning("تم إيقاف التداول بسبب تجاوز حد الخسارة اليومي")
                 return
+
+            for symbol in self.symbols:
+                try:
+                    ticker = self.client.get_symbol_ticker(symbol=symbol)
+                    current_price = float(ticker['price'])
+                    if self.update_trailing_stops(symbol, current_price):
+                        # تم触发 وقف الخسارة - execute بيع
+                        self.execute_sell_order(symbol, -100)
+                except Exception as e:
+                    logger.error(f"خطأ في التريلينغ ستوب لـ {symbol}: {e}")
             
             # جلب البيانات وتحليلها لكل عملة
             for symbol in self.symbols:
