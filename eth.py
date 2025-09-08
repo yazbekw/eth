@@ -1180,7 +1180,7 @@ class Crypto_Trading_Bot:
             logger.error(error_msg)
             return False, error_msg
 
-   def execute_sell_order(self, symbol, signal_strength, exit_type=None):
+    def execute_sell_order(self, symbol, signal_strength, exit_type=None):
         """تنفيذ أمر بيع"""
         try:
             # التحقق من مساحة الأوامر أولاً
