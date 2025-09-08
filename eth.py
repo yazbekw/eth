@@ -158,9 +158,9 @@ class Crypto_Trading_Bot:
         self.last_buy_prices = {} 
         
         # إعدادات العتبات الجديدة
-        self.BASELINE_BUY_THRESHOLD = 55 # رفع من 25 إلى 35
-        self.STRICT_BUY_THRESHOLD = 65   # رفع من 20 إلى 45 (للأوامر الممتلئة)
-        self.SELL_THRESHOLD = 45     # عتبة البيع تبقى كما هي
+        self.BASELINE_BUY_THRESHOLD = 45 # رفع من 25 إلى 35
+        self.STRICT_BUY_THRESHOLD = 55  # رفع من 20 إلى 45 (للأوامر الممتلئة)
+        self.SELL_THRESHOLD = 35     # عتبة البيع تبقى كما هي
 
         self.active_trailing_stops = {}  # لتتبع التريلينغ ستوب
 
@@ -168,7 +168,7 @@ class Crypto_Trading_Bot:
         self.last_buy_contributions = {}
         self.last_sell_contributions = {}
         self.active_trailing_stops = {}  # لتتبع التريلينغ ستوب
-	    self.symbols = ["BNBUSDT", "ETHUSDT"]  #
+        self.symbols = ["BNBUSDT", "ETHUSDT"]  #
         
         self.api_key = api_key or os.environ.get('BINANCE_API_KEY')
         self.api_secret = api_secret or os.environ.get('BINANCE_API_SECRET')
@@ -749,84 +749,82 @@ class Crypto_Trading_Bot:
             return None, None, None
 
     def calculate_signal_strength(self, data, signal_type='buy'):
-        """تقييم قوة الإشارة من -100 إلى +100% مع نظام التصويت"""
+        """تقييم قوة الإشارة من -100 إلى +100% مع نظام التصويت المعدل"""
         latest = data.iloc[-1]
 
         # منع الشراء في ذروة الشراء
         if signal_type == 'buy' and latest['rsi'] > 65:
             return -100  # لا تشتري أبداً
-        
+    
         # منع البيع في ذروة البيع  
         if signal_type == 'sell' and latest['rsi'] < 35:
             return -100  # لا تبيع أبداً
-        
-        # نظام التصويت
+    
+        # نظام التصويت المعدل (مجموع الأوزان = 100%)
         votes = {
-            'market_trend': 0,
-            'moving_averages': 0,
-            'macd': 0,
-            'rsi': 0,
-            'bollinger_bands': 0,
-            'volume': 0,
-            'adx': 0  # المؤشر الجديد
+            'market_trend': 0,      # 20%
+            'moving_averages': 0,   # 15%
+            'macd': 0,              # 15%
+            'rsi': 0,               # 12%
+            'bollinger_bands': 0,   # 15%
+            'volume': 0,            # 15%
+            'adx': 0                # 8%
         }
-        
-        # تسجيل مساهمة كل مؤشر
+    
+        # عوامل التطبيع للأوزان
+        normalization_factors = {
+            'market_trend': 0.20,      # 20%
+            'moving_averages': 0.15,   # 15%
+            'macd': 0.15,              # 15%
+            'rsi': 0.12,               # 12%
+            'bollinger_bands': 0.15,   # 15%
+            'volume': 0.15,            # 15%
+            'adx': 0.08                # 8%
+        }
+    
+        # حساب مساهمة كل مؤشر مع التطبيع
         indicator_contributions = {}
+        indicator_contributions['market_trend'] = self.calculate_market_trend_score(data, signal_type) * normalization_factors['market_trend']
+        indicator_contributions['moving_averages'] = self.calculate_ema_score(data, signal_type) * normalization_factors['moving_averages']
+        indicator_contributions['macd'] = self.calculate_macd_score(data, signal_type) * normalization_factors['macd']
+        indicator_contributions['rsi'] = self.calculate_rsi_score(data, signal_type) * normalization_factors['rsi']
+        indicator_contributions['bollinger_bands'] = self.calculate_bollinger_bands_score(data, signal_type) * normalization_factors['bollinger_bands']
+        indicator_contributions['volume'] = self.calculate_volume_score(data, signal_type) * normalization_factors['volume']
+        indicator_contributions['adx'] = self.calculate_adx_score(data, signal_type) * normalization_factors['adx']
 
-        # 1. اتجاه السوق (25%)
-        market_trend_score = self.calculate_market_trend_score(data, signal_type)
-        votes['market_trend'] = 1 if market_trend_score > 10 else (-1 if market_trend_score < -10 else 0)
-        indicator_contributions['market_trend'] = market_trend_score
-
-        # 2. المتوسطات المتحركة (20%)
-        ema_score = self.calculate_ema_score(data, signal_type)
-        votes['moving_averages'] = 1 if ema_score > 10 else (-1 if ema_score < -10 else 0)
-        indicator_contributions['moving_averages'] = ema_score
-
-        # 3. MACD (20%)
-        macd_score = self.calculate_macd_score(data, signal_type)
-        votes['macd'] = 1 if macd_score > 10 else (-1 if macd_score < -10 else 0)
-        indicator_contributions['macd'] = macd_score
-
-        # 4. RSI (15%)
-        rsi_score = self.calculate_rsi_score(data, signal_type)
-        votes['rsi'] = 1 if rsi_score > 7 else (-1 if rsi_score < -7 else 0)
-        indicator_contributions['rsi'] = rsi_score
-
-        # 5. بولينجر باند (20%)
-        bb_score = self.calculate_bollinger_bands_score(data, signal_type)
-        votes['bollinger_bands'] = 1 if bb_score > 10 else (-1 if bb_score < -10 else 0)
-        indicator_contributions['bollinger_bands'] = bb_score
-
-        # 6. الحجم (20%)
-        volume_score = self.calculate_volume_score(data, signal_type)
-        votes['volume'] = 1 if volume_score > 10 else (-1 if volume_score < -10 else 0)
-        indicator_contributions['volume'] = volume_score
-
-        # 7. ADX (مؤشر جديد - 15%)
-        adx_score = self.calculate_adx_score(data, signal_type)
-        votes['adx'] = 1 if adx_score > 7 else (-1 if adx_score < -7 else 0)
-        indicator_contributions['adx'] = adx_score
+        # نظام التصويت (كل مؤشر يصوت بنعم/لا/محايد)
+        votes['market_trend'] = 1 if indicator_contributions['market_trend'] > 2 else (-1 if indicator_contributions['market_trend'] < -2 else 0)
+        votes['moving_averages'] = 1 if indicator_contributions['moving_averages'] > 1.5 else (-1 if indicator_contributions['moving_averages'] < -1.5 else 0)
+        votes['macd'] = 1 if indicator_contributions['macd'] > 1.5 else (-1 if indicator_contributions['macd'] < -1.5 else 0)
+        votes['rsi'] = 1 if indicator_contributions['rsi'] > 1.2 else (-1 if indicator_contributions['rsi'] < -1.2 else 0)
+        votes['bollinger_bands'] = 1 if indicator_contributions['bollinger_bands'] > 1.5 else (-1 if indicator_contributions['bollinger_bands'] < -1.5 else 0)
+        votes['volume'] = 1 if indicator_contributions['volume'] > 1.5 else (-1 if indicator_contributions['volume'] < -1.5 else 0)
+        votes['adx'] = 1 if indicator_contributions['adx'] > 0.8 else (-1 if indicator_contributions['adx'] < -0.8 else 0)
 
         # حساب النتيجة الإجمالية بناء على التصويت
         total_votes = sum(votes.values())
         max_possible_votes = len(votes)
-        
-        # تحويل التصويت إلى نسبة مئوية
+    
+        # تحويل التصويت إلى نسبة مئوية (-100% إلى +100%)
         vote_percentage = (total_votes / max_possible_votes) * 100
-        
-        # الجمع بين النظام القديم والجديد
+    
+        # الجمع بين النظام القديم والجديد (70% للنظام القديم، 30% للتصويت)
         old_score = sum(indicator_contributions.values())
         combined_score = (old_score * 0.7) + (vote_percentage * 0.3)
-        
+    
         # تخزين مساهمات المؤشرات حسب نوع الإشارة
         if signal_type == 'buy':
             self.last_buy_contributions = indicator_contributions
         else:
             self.last_sell_contributions = indicator_contributions
 
-        return max(min(combined_score, 100), -100)
+        # تطبيق الحدود (-100 إلى +100)
+        final_score = max(min(combined_score, 100), -100)
+    
+        # تسجيل التفاصيل للتحليل
+        logger.debug(f"إشارة {signal_type} - النتيجة القديمة: {old_score:.1f}, التصويت: {vote_percentage:.1f}%, النهائية: {final_score:.1f}%")
+    
+        return final_score
 
     def calculate_adx_score(self, data, signal_type):
         """حساب درجة ADX"""
