@@ -435,10 +435,10 @@ class Crypto_Trading_Bot:
         support = data['bb_lower'].iloc[-1]
     
         # إذا near resistance - avoid buying
-        if current_price > resistance * 0.993:
+        if current_price > resistance * 0.997:
             return "near_resistance"
         # إذا near support - avoid selling
-        elif current_price < support * 1.07:
+        elif current_price < support * 1.03:
             return "near_support"
         return "neutral"
 
