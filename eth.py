@@ -762,11 +762,11 @@ class Crypto_Trading_Bot:
 
         # منع الشراء في ذروة الشراء
         if signal_type == 'buy' and latest['rsi'] > 65:
-            return -100  # لا تشتري أبداً
+            return 0  # لا تشتري أبداً
     
         # منع البيع في ذروة البيع  
         if signal_type == 'sell' and latest['rsi'] < 35:
-            return -100  # لا تبيع أبداً
+            return 0  # لا تبيع أبداً
     
         # نظام التصويت المعدل (مجموع الأوزان = 100%)
         votes = {
@@ -988,37 +988,57 @@ class Crypto_Trading_Bot:
                 return 5.0  # 25%
             else:  # في النصف السفلي
                 return 0.0  # 0%
-
+				
     def calculate_volume_score(self, data, signal_type):
-        """حساب درجة الحجم"""
-        latest = data.iloc[-1]
-        prev = data.iloc[-2]
-    
-        # حساب نسبة الحجم إلى المتوسط
-        volume_ratio = latest['volume'] / latest['volume_ma']
-    
-        if signal_type == 'buy':
-            if volume_ratio > 2.0:  # حجم كبير جداً
-                return 20.0  # 100%
-            elif volume_ratio > 1.5:  # حجم كبير
-                return 15.0  # 75%
-            elif volume_ratio > 1.2:  # حجم فوق المتوسط
-                return 10.0  # 50%
-            elif volume_ratio > 1.0:  # حجم طبيعي
-                return 5.0  # 25%
-            else:  # حجم ضعيف
-                return 0.0  # 0%
-        else:  # sell
-            if volume_ratio > 2.0:  # حجم كبير جداً (للبيع أيضاً)
-                return 20.0  # 100%
-            elif volume_ratio > 1.5:  # حجم كبير
-                return 15.0  # 75%
-            elif volume_ratio > 1.2:  # حجم فوق المتوسط
-                return 10.0  # 50%
-            elif volume_ratio > 1.0:  # حجم طبيعي
-                return 5.0  # 25%
-            else:  # حجم ضعيف
-                return 0.0  # 0%
+        """حساب درجة الحجم مع معالجة القيم غير المنطقية"""
+        try:
+            latest = data.iloc[-1]
+            prev = data.iloc[-2]
+        
+            # التأكد من وجود قيم صحيحة
+            if latest['volume'] <= 0 or latest['volume_ma'] <= 0:
+                return 0.0  # قيمة افتراضية في حالة البيانات غير الصحيحة
+        
+            # حساب نسبة الحجم إلى المتوسط
+            volume_ratio = latest['volume'] / latest['volume_ma']
+        
+            # معالجة القيم غير المنطقية
+            if np.isinf(volume_ratio) or np.isnan(volume_ratio):
+                volume_ratio = 1.0  # قيمة افتراضية
+            elif volume_ratio < 0.1:
+                volume_ratio = 0.1  # حد أدنى منطقي
+            elif volume_ratio > 10:
+                volume_ratio = 10  # حد أقصى منطقي
+        
+            # تسجيل معلومات التصحيح
+            logger.debug(f"حساب حجم {signal_type}: النسبة {volume_ratio:.3f}, الحجم {latest['volume']:.0f}, المتوسط {latest['volume_ma']:.0f}")
+        
+            if signal_type == 'buy':
+                if volume_ratio > 2.0:  # حجم كبير جداً
+                    return 20.0  # 100%
+                elif volume_ratio > 1.5:  # حجم كبير
+                    return 15.0  # 75%
+                elif volume_ratio > 1.2:  # حجم فوق المتوسط
+                    return 10.0  # 50%
+                elif volume_ratio > 1.0:  # حجم طبيعي
+                    return 5.0  # 25%
+                else:  # حجم ضعيف
+                    return 0.0  # 0%
+            else:  # sell
+                if volume_ratio > 2.0:  # حجم كبير جداً (للبيع أيضاً)
+                    return 20.0  # 100%
+                elif volume_ratio > 1.5:  # حجم كبير
+                    return 15.0  # 75%
+                elif volume_ratio > 1.2:  # حجم فوق المتوسط
+                    return 10.0  # 50%
+                elif volume_ratio > 1.0:  # حجم طبيعي
+                    return 5.0  # 25%
+                else:  # حجم ضعيف
+                    return 0.0  # 0%
+                
+        except Exception as e:
+            logger.error(f"خطأ في حساب درجة الحجم: {e}")
+            return 0.0  # قيمة افتراضية في حالة الخطأ
 
     def calculate_market_trend_score(self, data, signal_type):
         """حساب درجة اتجاه السوق"""
@@ -1385,7 +1405,18 @@ class Crypto_Trading_Bot:
             
                     # جمع التحليل التفصيلي
                     bb_position = ((latest['close'] - latest['bb_lower']) / (latest['bb_upper'] - latest['bb_lower']) * 100) if (latest['bb_upper'] - latest['bb_lower']) > 0 else 0
-                    volume_ratio = latest['volume'] / latest['volume_ma'] if latest['volume_ma'] > 0 else 1
+                    # حساب نسبة الحجم مع معالجة الأخطاء
+                    try:
+                        if latest['volume_ma'] > 0:
+                            volume_ratio = latest['volume'] / latest['volume_ma']
+                            # معالجة القيم الشاذة
+                            if volume_ratio < 0.1: volume_ratio = 0.1
+                            if volume_ratio > 10: volume_ratio = 10
+                            if np.isinf(volume_ratio) or np.isnan(volume_ratio): volume_ratio = 1.0
+                        else:
+                            volume_ratio = 1.0
+                    except:
+                        volume_ratio = 1.0
                 
                     detailed_analysis.append(
                         f"• {symbol}:\n"
@@ -1393,7 +1424,7 @@ class Crypto_Trading_Bot:
                         f"  📈 RSI: {latest['rsi']:.1f}\n"
                         f"  🔵 MACD: {latest['macd']:.3f}\n"
                         f"  📍 موقع البولينجر: {bb_position:.1f}%\n"
-                        f"  📦 الحجم: {latest['volume']:.0f} ({volume_ratio:.1f}x المتوسط)\n"
+                        f"  f"  📦 الحجم: {latest['volume']:.0f} ({min(max(volume_ratio, 0.1), 10):.1f}x المتوسط)\n"
                         f"  🎯 الإشارات: شراء {buy_signal:.1f}% | بيع {sell_signal:.1f}%"
                     )
             
