@@ -158,9 +158,9 @@ class Crypto_Trading_Bot:
         self.last_buy_prices = {} 
         
         # إعدادات العتبات الجديدة
-        self.BASELINE_BUY_THRESHOLD = 45 # رفع من 25 إلى 35
-        self.STRICT_BUY_THRESHOLD = 55  # رفع من 20 إلى 45 (للأوامر الممتلئة)
-        self.SELL_THRESHOLD = 35     # عتبة البيع تبقى كما هي
+        self.BASELINE_BUY_THRESHOLD = 25 # رفع من 25 إلى 35
+        self.STRICT_BUY_THRESHOLD = 35  # رفع من 20 إلى 45 (للأوامر الممتلئة)
+        self.SELL_THRESHOLD = 30     عتبة البيع تبقى كما هي
 
         self.active_trailing_stops = {}  # لتتبع التريلينغ ستوب
 
@@ -781,13 +781,13 @@ class Crypto_Trading_Bot:
     
         # عوامل التطبيع للأوزان
         normalization_factors = {
-            'market_trend': 0.20,      # 20%
+            'market_trend': 0.15,      # 20%
             'moving_averages': 0.15,   # 15%
             'macd': 0.15,              # 15%
-            'rsi': 0.12,               # 12%
+            'rsi': 0.20,               # 12%
             'bollinger_bands': 0.15,   # 15%
-            'volume': 0.15,            # 15%
-            'adx': 0.08                # 8%
+            'volume': 0.10,            # 15%
+            'adx': 0.10                # 8%
         }
     
         # حساب مساهمة كل مؤشر مع التطبيع
