@@ -1565,7 +1565,7 @@ class Crypto_Trading_Bot:
                     continue
         
                 # تأجيل بين العملات
-                time.sleep(1)
+                time.sleep(5)
     
             # حساب أداء اليوم
             performance = self.performance_analyzer.calculate_daily_performance(current_balance)
@@ -1634,7 +1634,7 @@ def main():
         
         # تهيئة وتشغيل بوت التداول
         bot = Crypto_Trading_Bot()
-        bot.start_trading(cycle_interval=900)  # دورة كل 5 دقائق
+        bot.start_trading(cycle_interval=1200)  # دورة كل 5 دقائق
         
     except Exception as e:
         logger.error(f"❌ خطأ في الدالة الرئيسية: {e}")
