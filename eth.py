@@ -158,9 +158,9 @@ class Crypto_Trading_Bot:
         self.last_buy_prices = {} 
         
         # إعدادات العتبات الجديدة
-        self.BASELINE_BUY_THRESHOLD = 20 # رفع من 25 إلى 35
-        self.STRICT_BUY_THRESHOLD = 30  # رفع من 20 إلى 45 (للأوامر الممتلئة)
-        self.SELL_THRESHOLD = 25     # عتبة البيع تبقى كما هي
+        self.BASELINE_BUY_THRESHOLD = 18 # رفع من 25 إلى 35
+        self.STRICT_BUY_THRESHOLD = 25  # رفع من 20 إلى 45 (للأوامر الممتلئة)
+        self.SELL_THRESHOLD = 18     # عتبة البيع تبقى كما هي
 
         self.active_trailing_stops = {}  # لتتبع التريلينغ ستوب
 
