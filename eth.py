@@ -707,7 +707,7 @@ class Crypto_Trading_Bot:
             logger.error(f"خطأ في إلغاء الأوامر القديمة: {e}")
             return 0, []
 
-	def get_detailed_asset_balances(self):
+    def get_detailed_asset_balances(self):
         """الحصول على الرصيد التفصيلي لكل عملة مع 5 خانات عشرية"""
         try:
             account = self.client.get_account()
