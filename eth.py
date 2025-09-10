@@ -158,12 +158,13 @@ class Crypto_Trading_Bot:
         self.last_buy_prices = {} 
         
         # إعدادات العتبات الجديدة
-        self.BASELINE_BUY_THRESHOLD = 18 # رفع من 25 إلى 35
-        self.STRICT_BUY_THRESHOLD = 25  # رفع من 20 إلى 45 (للأوامر الممتلئة)
-        self.SELL_THRESHOLD = 18     # عتبة البيع تبقى كما هي
+        self.BASELINE_BUY_THRESHOLD = 25 # رفع من 25 إلى 35
+        self.STRICT_BUY_THRESHOLD = 30  # رفع من 20 إلى 45 (للأوامر الممتلئة)
+        self.SELL_THRESHOLD = 25     # عتبة البيع تبقى كما هي
 
         self.active_trailing_stops = {}  # لتتبع التريلينغ ستوب
-
+        self.STOP_LOSS = 0.02
+        
 
         self.last_buy_contributions = {}
         self.last_sell_contributions = {}
@@ -295,11 +296,16 @@ class Crypto_Trading_Bot:
     def update_trailing_stops(self, symbol, current_price):
         if symbol not in self.active_trailing_stops:
             return False
+        logger.info(f"🔍 التريلينغ ستوب لـ {symbol}: "
+                    f"أعلى سعر: {self.active_trailing_stops[symbol]['highest_price']:.2f}, "
+                    f"وقف: {self.active_trailing_stops[symbol]['stop_price']:.2f}, "
+                    f"الحالي: {current_price:.2f}")
     
         # تحديث أعلى سعر وأخذ الربح
         if current_price > self.active_trailing_stops[symbol]['highest_price']:
             self.active_trailing_stops[symbol]['highest_price'] = current_price
             self.active_trailing_stops[symbol]['stop_price'] = current_price * (1 - self.STOP_LOSS)
+            
     
         # التحقق من أخذ الربح (+1.5%)
         if current_price >= self.active_trailing_stops[symbol]['highest_price'] * 1.015:
@@ -801,13 +807,13 @@ class Crypto_Trading_Bot:
     
         # عوامل التطبيع للأوزان
         normalization_factors = {
-            'market_trend': 0.15,      # 20%
+            'market_trend': 0.25,      # 20%
             'moving_averages': 0.15,   # 15%
-            'macd': 0.15,              # 15%
-            'rsi': 0.20,               # 12%
-            'bollinger_bands': 0.15,   # 15%
-            'volume': 0.10,            # 15%
-            'adx': 0.10                # 8%
+            'macd': 0.14,              # 15%
+            'rsi': 0.15,               # 12%
+            'bollinger_bands': 0.13,   # 15%
+            'volume': 0.9,            # 15%
+            'adx': 0.9                # 8%
         }
     
         # حساب مساهمة كل مؤشر مع التطبيع
@@ -1362,6 +1368,29 @@ class Crypto_Trading_Bot:
             error_msg = f"❌ خطأ في تنفيذ أمر البيع لـ {symbol}: {e}"
             logger.error(error_msg)
             return False, error_msg
+            
+    def test_trailing_stop(self, symbol):
+        """اختبار وظيفة التريلينغ ستوب يدوياً"""
+        try:
+            # محاكاة شراء
+            ticker = self.client.get_symbol_ticker(symbol=symbol)
+            current_price = float(ticker['price'])
+        
+            self.active_trailing_stops[symbol] = {
+                'highest_price': current_price,
+                'stop_price': current_price * (1 - self.STOP_LOSS),
+                'buy_price': current_price
+            }
+        
+            logger.info(f"🧪 تم تفعيل التريلينغ ستوب تجريبياً لـ {symbol}")
+            logger.info(f"   سعر الشراء: {current_price:.2f}")
+            logger.info(f"   وقف الخسارة الأولي: {self.active_trailing_stops[symbol]['stop_price']:.2f}")
+        
+            return True
+        
+        except Exception as e:
+            logger.error(f"❌ فشل اختبار التريلينغ ستوب: {e}")
+            return False
 
     def run_trading_cycle(self):
         """تشغيل دورة تداول كاملة"""
@@ -1389,8 +1418,15 @@ class Crypto_Trading_Bot:
                 try:
                     ticker = self.client.get_symbol_ticker(symbol=symbol)
                     current_price = float(ticker['price'])
+        
+                    # سجل معلومات التتبع
+                    if symbol in self.active_trailing_stops:
+                        logger.info(f"🔄 تحديث التريلينغ ستوب لـ {symbol}")
+            
                     if self.update_trailing_stops(symbol, current_price):
-                        self.execute_sell_order(symbol, 100)
+                        logger.info(f"🎯 تم触发 التريلينغ ستوب لـ {symbol} - البيع")
+                        self.execute_sell_order(symbol, 100, "trailing_stop")
+            
                 except Exception as e:
                     logger.error(f"خطأ في التريلينغ ستوب لـ {symbol}: {e}")
     
