@@ -809,9 +809,9 @@ class Crypto_Trading_Bot:
         normalization_factors = {
             'market_trend': 0.25,      # 20%
             'moving_averages': 0.15,   # 15%
-            'macd': 0.14,              # 15%
+            'macd': 0.12,              # 15%
             'rsi': 0.15,               # 12%
-            'bollinger_bands': 0.13,   # 15%
+            'bollinger_bands': 0.15,   # 15%
             'volume': 0.9,            # 15%
             'adx': 0.9                # 8%
         }
