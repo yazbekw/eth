@@ -1424,7 +1424,7 @@ class Crypto_Trading_Bot:
                         f"  📈 RSI: {latest['rsi']:.1f}\n"
                         f"  🔵 MACD: {latest['macd']:.3f}\n"
                         f"  📍 موقع البولينجر: {bb_position:.1f}%\n"
-                        f"  f"  📦 الحجم: {latest['volume']:.0f} ({min(max(volume_ratio, 0.1), 10):.1f}x المتوسط)\n"
+                        f"  📦 الحجم: {latest['volume']:.0f} ({min(max(volume_ratio, 0.1), 10):.1f}x المتوسط)\n"
                         f"  🎯 الإشارات: شراء {buy_signal:.1f}% | بيع {sell_signal:.1f}%"
                     )
             
