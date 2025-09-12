@@ -1613,23 +1613,23 @@ class Crypto_Trading_Bot:
             # التحقق من مساحة الأوامر أولاً
             if not self.manage_order_space(symbol):
                 return False, "لا توجد مساحة للأوامر الجديدة"
-        
+    
             # الحصول على السعر الحالي
             ticker = self.client.get_symbol_ticker(symbol=symbol)
             current_price = float(ticker['price'])
-        
+    
             # تحديد حجم الصفقة
             quantity, trade_size = self.determine_trade_size(signal_strength, symbol)
-        
+    
             if quantity <= 0:
                 return False, "حجم الصفقة غير صالح"
-        
+    
             # تنفيذ أمر السوق
             order = self.client.order_market_buy(
                 symbol=symbol,
                 quantity=quantity
             )
-        
+    
             # حساب السعر الفعلي مع الانزلاق
             executed_price = float(order['fills'][0]['price']) if order['fills'] else current_price
 
@@ -1641,7 +1641,7 @@ class Crypto_Trading_Bot:
             }
 
             self.last_buy_prices[symbol] = executed_price
-        
+    
             # إضافة سجل الصفقة
             self.add_trade_record(
                 symbol=symbol,
@@ -1652,7 +1652,7 @@ class Crypto_Trading_Bot:
                 signal_strength=signal_strength,
                 order_id=order['orderId']
             )
-        
+    
             # إرسال إشعار
             message = (
                 f"✅ <b>تم تنفيذ أمر شراء</b>\n\n"
@@ -1663,37 +1663,37 @@ class Crypto_Trading_Bot:
                 f"قوة الإشارة: {signal_strength:.1f}%\n"
                 f"وقت التنفيذ: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}"
             )
-        
+    
             self.send_notification(message)
-        
+     
             # تحليل الأداء بعد 5 دقائق في خلفية منفصلة
             def analyze_performance_later():
                 time.sleep(300)  # انتظار 5 دقائق
                 try:
                     current_price_after = float(self.client.get_symbol_ticker(symbol=symbol)['price'])
                     profit_loss = (current_price_after - executed_price) * quantity
-                
+            
                     # تحليل الأداء
                     self.learning_system.analyze_trade_performance(
                         profit_loss, signal_strength, dynamic_weights, symbol
                     )
                 except Exception as e:
                     logger.error(f"خطأ في تحليل أداء الشراء: {e}")
-        
+    
             # تشغيل التحليل في خلفية منفصلة
             import threading
             perf_thread = threading.Thread(target=analyze_performance_later)
             perf_thread.daemon = True
             perf_thread.start()
-        
+    
             return True, "تم تنفيذ أمر الشراء بنجاح"
-         
+     
         except Exception as e:
             error_msg = f"❌ خطأ في تنفيذ أمر الشراء لـ {symbol}: {e}"
             logger.error(error_msg)
             return False, error_msg
-
-   def execute_sell_order(self, symbol, signal_strength, exit_type=None, dynamic_weights=None):
+    
+    def execute_sell_order(self, symbol, signal_strength, exit_type=None, dynamic_weights=None):
         """تنفيذ أمر بيع مع تتبع الأداء"""
         try:
             # التحقق من مساحة الأوامر أولاً
