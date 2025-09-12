@@ -881,7 +881,7 @@ class Crypto_Trading_Bot:
                         'win_rate': symbol_win_rate,
                         'total_profit': symbol_total_profit
                     }
-			report = {
+            report = {
                 "date": datetime.now().strftime("%Y-%m-%d"),
                 "performance": performance,
                 "signal_analysis": signal_analysis,
