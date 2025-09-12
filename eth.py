@@ -149,6 +149,260 @@ class PerformanceAnalyzer:
         self.daily_start_time = datetime.now()
         self.trading_enabled = True
 
+class MarketConditionAnalyzer:
+    def __init__(self):
+        self.conditions = {
+            'TRENDING_BULL': 0,
+            'TRENDING_BEAR': 0, 
+            'RANGING': 0,
+            'VOLATILE': 0,
+            'LOW_VOLATILITY': 0
+        }
+        
+        # مصفوفة الأوزان الأساسية
+        self.WEIGHT_MATRIX = {
+            'TRENDING_BULL': {
+                'market_trend': 25, 'moving_averages': 20, 'macd': 15,
+                'rsi': 10, 'bollinger_bands': 10, 'volume': 10, 'adx': 10
+            },
+            'TRENDING_BEAR': {
+                'market_trend': 25, 'moving_averages': 20, 'macd': 15,
+                'rsi': 10, 'bollinger_bands': 10, 'volume': 10, 'adx': 10
+            },
+            'RANGING': {
+                'market_trend': 10, 'moving_averages': 10, 'macd': 10,
+                'rsi': 25, 'bollinger_bands': 25, 'volume': 10, 'adx': 10
+            },
+            'VOLATILE': {
+                'market_trend': 15, 'moving_averages': 15, 'macd': 10,
+                'rsi': 15, 'bollinger_bands': 20, 'volume': 15, 'adx': 10
+            },
+            'LOW_VOLATILITY': {
+                'market_trend': 20, 'moving_averages': 20, 'macd': 15,
+                'rsi': 15, 'bollinger_bands': 10, 'volume': 10, 'adx': 10
+            }
+        }
+
+   
+    def determine_trend_strength(self, data):
+        """تحديد قوة الاتجاه"""
+        try:
+            # حساب معدل تغير السعر
+            price_change = data['close'].pct_change().rolling(5).mean().iloc[-1] * 100
+            
+            if abs(price_change) > 2.0:
+                return 'STRONG'
+            elif abs(price_change) > 1.0:
+                return 'MODERATE'
+            else:
+                return 'WEAK'
+        except Exception as e:
+            logger.error(f"خطأ في تحديد قوة الاتجاه: {e}")
+            return 'WEAK'
+
+    def analyze_market_condition(self, data):
+        """تحليل ظروف السوق من البيانات"""
+        try:
+            # حساب تقلبات السوق
+            volatility = data['close'].pct_change().std() * 100
+            
+            # حساب ADX واتجاهاته
+            adx, plus_di, minus_di = self.calculate_adx(data)
+            current_adx = adx.iloc[-1] if adx is not None else 0
+            current_plus_di = plus_di.iloc[-1] if plus_di is not None else 0
+            current_minus_di = minus_di.iloc[-1] if minus_di is not None else 0
+            
+            # تحديث أوزان الظروف
+            self.conditions['VOLATILE'] = max(0, min(100, (volatility - 1) * 25))
+            self.conditions['TRENDING_BULL'] = current_plus_di if current_plus_di > current_minus_di else 0
+            self.conditions['TRENDING_BEAR'] = current_minus_di if current_minus_di > current_plus_di else 0
+            self.conditions['RANGING'] = max(0, 100 - current_adx) if current_adx > 0 else 50
+            self.conditions['LOW_VOLATILITY'] = max(0, 100 - (volatility * 20))
+            
+            return self.conditions
+            
+        except Exception as e:
+            logger.error(f"خطأ في تحليل ظروف السوق: {e}")
+            return self.conditions
+
+    def calculate_dynamic_weights(self, market_conditions):
+        """حساب الأوزان الديناميكية بناء على ظروف السوق"""
+        try:
+            # تطبيع أوزان الظروف
+            total_condition_weight = sum(market_conditions.values())
+            if total_condition_weight == 0:
+                return self.WEIGHT_MATRIX['RANGING']  # قيمة افتراضية
+            
+            normalized_conditions = {
+                cond: (weight / total_condition_weight) * 100 
+                for cond, weight in market_conditions.items()
+            }
+            
+            # حساب الأوزان النهائية لكل مؤشر
+            final_weights = {
+                'market_trend': 0, 'moving_averages': 0, 'macd': 0,
+                'rsi': 0, 'bollinger_bands': 0, 'volume': 0, 'adx': 0
+            }
+            
+            # دمج الأوزان حسب ظروف السوق
+            for condition, condition_weight in normalized_conditions.items():
+                if condition in self.WEIGHT_MATRIX:
+                    for indicator, weight in self.WEIGHT_MATRIX[condition].items():
+                        final_weights[indicator] += weight * (condition_weight / 100)
+            
+            return final_weights
+            
+        except Exception as e:
+            logger.error(f"خطأ في حساب الأوزان الديناميكية: {e}")
+            return self.WEIGHT_MATRIX['RANGING']
+
+class LearningSystem:
+    def __init__(self, db_url=None):
+        self.performance_history = []
+        self.weight_adjustment_factor = 0.1
+        self.db_url = db_url
+        self.load_performance_data()
+        
+    def load_performance_data(self):
+        """تحميل بيانات الأداء من قاعدة البيانات"""
+        try:
+            if self.db_url:
+                # هنا سيتم تحميل البيانات من MongoDB أو SQLite
+                pass
+            elif os.path.exists('performance_data.json'):
+                with open('performance_data.json', 'r', encoding='utf-8') as f:
+                    self.performance_history = json.load(f)
+        except Exception as e:
+            logger.error(f"خطأ في تحميل بيانات الأداء: {e}")
+            self.performance_history = []
+
+    def save_performance_data(self):
+        """حفظ بيانات الأداء"""
+        try:
+            if self.db_url:
+                # حفظ في قاعدة البيانات
+                pass
+            else:
+                with open('performance_data.json', 'w', encoding='utf-8') as f:
+                    json.dump(self.performance_history, f, ensure_ascii=False, indent=2)
+        except Exception as e:
+            logger.error(f"خطأ في حفظ بيانات الأداء: {e}")
+
+    def analyze_trade_performance(self, trade_result, signal_strength, weights_used, symbol):
+        """تحليل أداء الصفقة وتعديل الأوزان"""
+        try:
+            performance_data = {
+                'timestamp': datetime.now().isoformat(),
+                'symbol': symbol,
+                'profit_loss': trade_result,
+                'signal_strength': signal_strength,
+                'weights': weights_used,
+                'success': trade_result > 0
+            }
+            
+            self.performance_history.append(performance_data)
+            
+            # حفظ البيانات بعد كل 5 صفقات
+            if len(self.performance_history) % 5 == 0:
+                self.save_performance_data()
+                
+            # تعديل الأوزان بعد 10 صفقات
+            if len(self.performance_history) >= 10:
+                self.adjust_weights_based_on_performance()
+                
+        except Exception as e:
+            logger.error(f"خطأ في تحليل أداء الصفقة: {e}")
+
+    def adjust_weights_based_on_performance(self):
+        """تعديل الأوزان بناء على الأداء التاريخي"""
+        try:
+            if not self.performance_history:
+                return
+                
+            # تحليل الأداء لكل مؤشر
+            indicator_performance = {}
+            indicators = list(self.performance_history[0]['weights'].keys())
+            
+            for indicator in indicators:
+                successful_trades = [
+                    trade for trade in self.performance_history 
+                    if trade['success'] and trade['weights'].get(indicator, 0) > 10
+                ]
+                
+                total_relevant = len([t for t in self.performance_history if t['weights'].get(indicator, 0) > 10])
+                
+                if total_relevant > 0:
+                    success_rate = len(successful_trades) / total_relevant * 100
+                    indicator_performance[indicator] = success_rate
+            
+            # تعديل مصفوفة الأوزان
+            self.update_weight_matrix(indicator_performance)
+            
+        except Exception as e:
+            logger.error(f"خطأ في تعديل الأوزان: {e}")
+
+    def update_weight_matrix(self, indicator_performance):
+        """تحديث مصفوفة الأوزان بناء على الأداء"""
+        try:
+            market_analyzer = MarketConditionAnalyzer()
+            
+            for indicator, success_rate in indicator_performance.items():
+                adjustment = (success_rate - 50) * self.weight_adjustment_factor
+                
+                # تطبيق التعديل على جميع ظروف السوق
+                for condition in market_analyzer.WEIGHT_MATRIX.keys():
+                    if indicator in market_analyzer.WEIGHT_MATRIX[condition]:
+                        new_weight = market_analyzer.WEIGHT_MATRIX[condition][indicator] + adjustment
+                        # التأكد من أن الوزن بين 5 و30
+                        new_weight = max(5, min(30, new_weight))
+                        market_analyzer.WEIGHT_MATRIX[condition][indicator] = new_weight
+            
+            logger.info(f"تم تعديل الأوزان: {indicator_performance}")
+            
+        except Exception as e:
+            logger.error(f"خطأ في تحديث مصفوفة الأوزان: {e}")
+
+    def weekly_review(self):
+        """مراجعة أسبوعية لأداء النظام"""
+        try:
+            # تحليل الأداء الأسبوعي
+            weekly_trades = [
+                t for t in self.performance_history 
+                if datetime.fromisoformat(t['timestamp']) > datetime.now() - timedelta(days=7)
+            ]
+            
+            if not weekly_trades:
+                return
+                
+            successful_trades = [t for t in weekly_trades if t['success']]
+            win_rate = len(successful_trades) / len(weekly_trades) * 100
+            
+            # تعديل معامل التعلم
+            if win_rate > 60:
+                self.weight_adjustment_factor = min(0.2, self.weight_adjustment_factor * 1.1)
+            elif win_rate < 40:
+                self.weight_adjustment_factor = max(0.05, self.weight_adjustment_factor * 0.9)
+                
+            logger.info(f"مراجعة أسبوعية - معدل النجاح: {win_rate:.1f}%")
+            
+            # تنظيف البيانات القديمة
+            self.clean_old_data()
+            
+        except Exception as e:
+            logger.error(f"خطأ في المراجعة الأسبوعية: {e}")
+
+    def clean_old_data(self):
+        """تنظيف البيانات الأقدم من شهر"""
+        try:
+            one_month_ago = datetime.now() - timedelta(days=30)
+            self.performance_history = [
+                t for t in self.performance_history 
+                if datetime.fromisoformat(t['timestamp']) > one_month_ago
+            ]
+            self.save_performance_data()
+        except Exception as e:
+            logger.error(f"خطأ في تنظيف البيانات القديمة: {e}")
+
 class Crypto_Trading_Bot:
     def __init__(self, api_key=None, api_secret=None, telegram_token=None, telegram_chat_id=None):
         self.notifier = None
@@ -158,25 +412,20 @@ class Crypto_Trading_Bot:
         self.last_buy_prices = {} 
         
         # إعدادات العتبات الجديدة
-        self.BASELINE_BUY_THRESHOLD = 33 # رفع من 25 إلى 35
-        self.STRICT_BUY_THRESHOLD = 35  # رفع من 20 إلى 45 (للأوامر الممتلئة)
-        self.SELL_THRESHOLD = 30     # عتبة البيع تبقى كما هي
+        self.BASELINE_BUY_THRESHOLD = 35
+        self.STRICT_BUY_THRESHOLD = 34
+        self.SELL_THRESHOLD = 35
 
-        self.active_trailing_stops = {}  # لتتبع التريلينغ ستوب
+        self.active_trailing_stops = {}
         self.STOP_LOSS = 0.02
-        
-
         self.last_buy_contributions = {}
         self.last_sell_contributions = {}
-        self.active_trailing_stops = {}  # لتتبع التريلينغ ستوب
-        self.symbols = ["BNBUSDT", "ETHUSDT"]  #
-
-        self.MIN_TRADE_SIZE = 5  # ← أضف هذا
-        self.MAX_TRADE_SIZE = 50  # ← أضف هذا
-        self.MAX_ALGO_ORDERS = 10  # ← أضف هذا
-        self.fee_rate = 0.0005  # ← أضف هذا
-        self.slippage = 0.00015  # ← أضف هذا
-        self.STOP_LOSS = 0.02  # ← أضف هذا
+        self.symbols = ["BNBUSDT", "ETHUSDT"]
+        self.MIN_TRADE_SIZE = 5
+        self.MAX_TRADE_SIZE = 50
+        self.MAX_ALGO_ORDERS = 10
+        self.fee_rate = 0.0005
+        self.slippage = 0.00015
         self.MAX_POSITION_SIZE = 0.5
         
         self.api_key = api_key or os.environ.get('BINANCE_API_KEY')
@@ -199,21 +448,6 @@ class Crypto_Trading_Bot:
             logger.error(error_msg)
             raise ConnectionError(error_msg)
             
-        self.fee_rate = 0.0005
-        self.slippage = 0.00015
-        self.trades = []
-        self.symbols = ["BNBUSDT", "ETHUSDT"]  # إضافة ETH إلى العملات المتداولة
-        self.STOP_LOSS = 0.02
-        self.MAX_POSITION_SIZE = 0.5
-        
-        # إعدادات إدارة الأوامر
-        self.MAX_ALGO_ORDERS = 10
-        self.ORDERS_TO_CANCEL = 2
-        
-        # إعدادات حجم الصفقة بالدولار حسب قوة الإشارة
-        self.MIN_TRADE_SIZE = 5
-        self.MAX_TRADE_SIZE = 50
-        
         if telegram_token and telegram_chat_id:
             self.notifier = TelegramNotifier(telegram_token, telegram_chat_id)
             logger.info("تم تهيئة إشعارات Telegram")
@@ -224,7 +458,10 @@ class Crypto_Trading_Bot:
             self.initial_balance = self.get_real_balance()
             self.performance_analyzer.daily_start_balance = self.initial_balance
         
-            # الحصول على الرصيد التفصيلي
+            # إضافة الأنظمة الجديدة
+            self.market_analyzer = MarketConditionAnalyzer(self)  # تمرير reference للبوت
+            self.learning_system = LearningSystem()
+            
             detailed_balance = self.get_detailed_balance()
             balance_details = "\n".join(detailed_balance)
         
@@ -244,7 +481,8 @@ class Crypto_Trading_Bot:
                     f"🔴 عتبة البيع: {self.SELL_THRESHOLD}%\n"
                     f"⛔ حد الخسارة اليومي: 2%\n"
                     f"🗳️ نظام التصويت: مفعل مع مؤشر ADX\n"
-                    f"📉 التريلينغ ستوب: مفعل"
+                    f"📉 التريلينغ ستوب: مفعل\n"
+                    f"🎯 نظام الأوزان الديناميكية: مفعل"
                 )
         except Exception as e:
             logger.error(f"خطأ في جلب الرصيد الابتدائي: {e}")
@@ -782,88 +1020,65 @@ class Crypto_Trading_Bot:
             logger.error(f"خطأ في حساب ADX: {e}")
             return None, None, None
 
-    def calculate_signal_strength(self, data, signal_type='buy'):
-        """تقييم قوة الإشارة من -100 إلى +100% مع نظام التصويت المعدل"""
-        latest = data.iloc[-1]
+   def calculate_signal_strength(self, data, signal_type='buy'):
+        """تقييم قوة الإشارة مع الأوزان الديناميكية"""
+        try:
+            # تحليل ظروف السوق الحالية
+            market_conditions = self.market_analyzer.analyze_market_condition(data)
+        
+            # حساب الأوزان الديناميكية
+            dynamic_weights = self.market_analyzer.calculate_dynamic_weights(market_conditions)
+        
+            # حساب مساهمة كل مؤشر مع الأوزان الجديدة
+            indicator_contributions = {}
+            indicator_contributions['market_trend'] = self.calculate_market_trend_score(data, signal_type) * (dynamic_weights['market_trend'] / 100)
+            indicator_contributions['moving_averages'] = self.calculate_ema_score(data, signal_type) * (dynamic_weights['moving_averages'] / 100)
+            indicator_contributions['macd'] = self.calculate_macd_score(data, signal_type) * (dynamic_weights['macd'] / 100)
+            indicator_contributions['rsi'] = self.calculate_rsi_score(data, signal_type) * (dynamic_weights['rsi'] / 100)
+            indicator_contributions['bollinger_bands'] = self.calculate_bollinger_bands_score(data, signal_type) * (dynamic_weights['bollinger_bands'] / 100)
+            indicator_contributions['volume'] = self.calculate_volume_score(data, signal_type) * (dynamic_weights['volume'] / 100)
+            indicator_contributions['adx'] = self.calculate_adx_score(data, signal_type) * (dynamic_weights['adx'] / 100)
 
-        # منع الشراء في ذروة الشراء
-        if signal_type == 'buy' and latest['rsi'] > 65:
-            return 0  # لا تشتري أبداً
-    
-        # منع البيع في ذروة البيع  
-        if signal_type == 'sell' and latest['rsi'] < 35:
-            return 0  # لا تبيع أبداً
-    
-        # نظام التصويت المعدل (مجموع الأوزان = 100%)
-        votes = {
-            'market_trend': 0,      # 20%
-            'moving_averages': 0,   # 15%
-            'macd': 0,              # 15%
-            'rsi': 0,               # 12%
-            'bollinger_bands': 0,   # 15%
-            'volume': 0,            # 15%
-            'adx': 0                # 8%
-        }
-    
-        # عوامل التطبيع للأوزان
-        normalization_factors = {
-            'market_trend': 0.20,      # 20%
-            'moving_averages': 0.15,   # 15%
-            'macd': 0.15,              # 15%
-            'rsi': 0.17,               # 12%
-            'bollinger_bands': 0.15,   # 15%
-            'volume': 0.9,            # 15%
-            'adx': 0.9                # 8%
-        }
-    
-        # حساب مساهمة كل مؤشر مع التطبيع
-        indicator_contributions = {}
-        indicator_contributions['market_trend'] = self.calculate_market_trend_score(data, signal_type) * normalization_factors['market_trend']
-        indicator_contributions['moving_averages'] = self.calculate_ema_score(data, signal_type) * normalization_factors['moving_averages']
-        indicator_contributions['macd'] = self.calculate_macd_score(data, signal_type) * normalization_factors['macd']
-        indicator_contributions['rsi'] = self.calculate_rsi_score(data, signal_type) * normalization_factors['rsi']
-        indicator_contributions['bollinger_bands'] = self.calculate_bollinger_bands_score(data, signal_type) * normalization_factors['bollinger_bands']
-        indicator_contributions['volume'] = self.calculate_volume_score(data, signal_type) * normalization_factors['volume']
-        indicator_contributions['adx'] = self.calculate_adx_score(data, signal_type) * normalization_factors['adx']
+            # نظام التصويت المعدل
+            votes = {}
+            votes['market_trend'] = 1 if indicator_contributions['market_trend'] > 2 else (-1 if indicator_contributions['market_trend'] < -2 else 0)
+            votes['moving_averages'] = 1 if indicator_contributions['moving_averages'] > 1.5 else (-1 if indicator_contributions['moving_averages'] < -1.5 else 0)
+            votes['macd'] = 1 if indicator_contributions['macd'] > 1.5 else (-1 if indicator_contributions['macd'] < -1.5 else 0)
+            votes['rsi'] = 1 if indicator_contributions['rsi'] > 1.2 else (-1 if indicator_contributions['rsi'] < -1.2 else 0)
+            votes['bollinger_bands'] = 1 if indicator_contributions['bollinger_bands'] > 1.5 else (-1 if indicator_contributions['bollinger_bands'] < -1.5 else 0)
+            votes['volume'] = 1 if indicator_contributions['volume'] > 1.5 else (-1 if indicator_contributions['volume'] < -1.5 else 0)
+            votes['adx'] = 1 if indicator_contributions['adx'] > 0.8 else (-1 if indicator_contributions['adx'] < -0.8 else 0)
 
-        # نظام التصويت (كل مؤشر يصوت بنعم/لا/محايد)
-        votes['market_trend'] = 1 if indicator_contributions['market_trend'] > 2 else (-1 if indicator_contributions['market_trend'] < -2 else 0)
-        votes['moving_averages'] = 1 if indicator_contributions['moving_averages'] > 1.5 else (-1 if indicator_contributions['moving_averages'] < -1.5 else 0)
-        votes['macd'] = 1 if indicator_contributions['macd'] > 1.5 else (-1 if indicator_contributions['macd'] < -1.5 else 0)
-        votes['rsi'] = 1 if indicator_contributions['rsi'] > 1.2 else (-1 if indicator_contributions['rsi'] < -1.2 else 0)
-        votes['bollinger_bands'] = 1 if indicator_contributions['bollinger_bands'] > 1.5 else (-1 if indicator_contributions['bollinger_bands'] < -1.5 else 0)
-        votes['volume'] = 1 if indicator_contributions['volume'] > 1.5 else (-1 if indicator_contributions['volume'] < -1.5 else 0)
-        votes['adx'] = 1 if indicator_contributions['adx'] > 0.8 else (-1 if indicator_contributions['adx'] < -0.8 else 0)
+            # حساب النتيجة الإجمالية
+            total_votes = sum(votes.values())
+            max_possible_votes = len(votes)
+            vote_percentage = (total_votes / max_possible_votes) * 100
 
-        # حساب النتيجة الإجمالية بناء على التصويت
-        total_votes = sum(votes.values())
-        max_possible_votes = len(votes)
-    
-        # تحويل التصويت إلى نسبة مئوية (-100% إلى +100%)
-        vote_percentage = (total_votes / max_possible_votes) * 100
-    
-        # الجمع بين النظام القديم والجديد (70% للنظام القديم، 30% للتصويت)
-        old_score = sum(indicator_contributions.values())
-        combined_score = (old_score * 0.7) + (vote_percentage * 0.3)
-    
-        # تخزين مساهمات المؤشرات حسب نوع الإشارة
-        if signal_type == 'buy':
-            self.last_buy_contributions = indicator_contributions
-        else:
-            self.last_sell_contributions = indicator_contributions
+            # الجمع بين النظام القديم والجديد
+            old_score = sum(indicator_contributions.values())
+            combined_score = (old_score * 0.6) + (vote_percentage * 0.4)
 
-        # تطبيق الحدود (-100 إلى +100)
-        final_score = max(min(combined_score, 100), -100)
-    
-        # تسجيل التفاصيل للتحليل
-        logger.debug(f"إشارة {signal_type} - النتيجة القديمة: {old_score:.1f}, التصويت: {vote_percentage:.1f}%, النهائية: {final_score:.1f}%")
-    
-        return final_score
+            # تخزين مساهمات المؤشرات
+            if signal_type == 'buy':
+                self.last_buy_contributions = indicator_contributions
+            else:
+                self.last_sell_contributions = indicator_contributions
 
+            final_score = max(min(combined_score, 100), -100)
+        
+            logger.debug(f"إشارة {signal_type} - النتيجة: {final_score:.1f}%, الأوزان: {dynamic_weights}")
+        
+            return final_score, dynamic_weights
+        
+        except Exception as e:
+            logger.error(f"خطأ في حساب قوة الإشارة: {e}")
+            return 0, self.market_analyzer.WEIGHT_MATRIX['RANGING']
+
+	   
     def calculate_adx_score(self, data, signal_type):
         """حساب درجة ADX"""
         try:
-            adx, plus_di, minus_di = self.calculate_adx(data)
+            adx, plus_di, minus_di = Crypto_Trading_Bot.calculate_adx(data)  # إذا كانت static
             if adx is None:
                 return 0
                 
@@ -1216,29 +1431,29 @@ class Crypto_Trading_Bot:
             logger.error(f"❌ خطأ في تحديد حجم الصفقة: {e}")
             return 0, 0
 
-    def execute_buy_order(self, symbol, signal_strength):
-        """تنفيذ أمر شراء"""
+    def execute_buy_order(self, symbol, signal_strength, dynamic_weights):
+        """تنفيذ أمر شراء مع تتبع الأداء"""
         try:
             # التحقق من مساحة الأوامر أولاً
             if not self.manage_order_space(symbol):
                 return False, "لا توجد مساحة للأوامر الجديدة"
-            
+        
             # الحصول على السعر الحالي
             ticker = self.client.get_symbol_ticker(symbol=symbol)
             current_price = float(ticker['price'])
-            
+        
             # تحديد حجم الصفقة
             quantity, trade_size = self.determine_trade_size(signal_strength, symbol)
-            
+        
             if quantity <= 0:
                 return False, "حجم الصفقة غير صالح"
-            
+        
             # تنفيذ أمر السوق
             order = self.client.order_market_buy(
                 symbol=symbol,
                 quantity=quantity
             )
-            
+        
             # حساب السعر الفعلي مع الانزلاق
             executed_price = float(order['fills'][0]['price']) if order['fills'] else current_price
 
@@ -1250,7 +1465,7 @@ class Crypto_Trading_Bot:
             }
 
             self.last_buy_prices[symbol] = executed_price
-            
+        
             # إضافة سجل الصفقة
             self.add_trade_record(
                 symbol=symbol,
@@ -1261,7 +1476,7 @@ class Crypto_Trading_Bot:
                 signal_strength=signal_strength,
                 order_id=order['orderId']
             )
-            
+        
             # إرسال إشعار
             message = (
                 f"✅ <b>تم تنفيذ أمر شراء</b>\n\n"
@@ -1272,54 +1487,74 @@ class Crypto_Trading_Bot:
                 f"قوة الإشارة: {signal_strength:.1f}%\n"
                 f"وقت التنفيذ: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}"
             )
-            
+        
             self.send_notification(message)
-            
+        
+            # تحليل الأداء بعد 5 دقائق في خلفية منفصلة
+            def analyze_performance_later():
+                time.sleep(300)  # انتظار 5 دقائق
+                try:
+                    current_price_after = float(self.client.get_symbol_ticker(symbol=symbol)['price'])
+                    profit_loss = (current_price_after - executed_price) * quantity
+                
+                    # تحليل الأداء
+                    self.learning_system.analyze_trade_performance(
+                        profit_loss, signal_strength, dynamic_weights, symbol
+                    )
+                except Exception as e:
+                    logger.error(f"خطأ في تحليل أداء الشراء: {e}")
+        
+            # تشغيل التحليل في خلفية منفصلة
+            import threading
+            perf_thread = threading.Thread(target=analyze_performance_later)
+            perf_thread.daemon = True
+            perf_thread.start()
+        
             return True, "تم تنفيذ أمر الشراء بنجاح"
-            
+         
         except Exception as e:
             error_msg = f"❌ خطأ في تنفيذ أمر الشراء لـ {symbol}: {e}"
             logger.error(error_msg)
             return False, error_msg
 
-    def execute_sell_order(self, symbol, signal_strength, exit_type=None):
-        """تنفيذ أمر بيع"""
+   def execute_sell_order(self, symbol, signal_strength, exit_type=None, dynamic_weights=None):
+        """تنفيذ أمر بيع مع تتبع الأداء"""
         try:
             # التحقق من مساحة الأوامر أولاً
             if not self.manage_order_space(symbol):
                 return False, "لا توجد مساحة للأوامر الجديدة"
-    
+
             # الحصول على رصيد العملة
             asset = symbol.replace('USDT', '')
             balance = self.client.get_asset_balance(asset=asset)
             if not balance or float(balance['free']) <= 0:
                 return False, "لا يوجد رصيد كافٍ للبيع"
-    
+
             quantity = float(balance['free'])
-    
+
             # الحصول على السعر الحالي
             ticker = self.client.get_symbol_ticker(symbol=symbol)
             current_price = float(ticker['price'])
-    
+
             # تنفيذ أمر السوق
             order = self.client.order_market_sell(
                 symbol=symbol,
                 quantity=quantity
             )
-    
+
             # حساب السعر الفعلي مع الانزلاق
             executed_price = float(order['fills'][0]['price']) if order['fills'] else current_price
-    
+
             # حساب حجم الصفقة
             trade_size = quantity * executed_price
-    
+
             # حساب الربح/الخسارة إذا كان هناك سعر شراء سابق
             profit_loss = 0
             if symbol in self.last_buy_prices:
                 buy_price = self.last_buy_prices[symbol]
                 profit_loss = (executed_price - buy_price) * quantity
                 del self.last_buy_prices[symbol]  # إزالة السعر بعد البيع
-        
+    
             # إضافة سجل الصفقة
             self.add_trade_record(
                 symbol=symbol,
@@ -1332,11 +1567,11 @@ class Crypto_Trading_Bot:
                 profit_loss=profit_loss,
                 exit_type=exit_type
             )
-     
+ 
             # إزالة التريلينغ ستوب إذا كان موجوداً
             if symbol in self.active_trailing_stops:
                 del self.active_trailing_stops[symbol]
-         
+     
             # إنشاء الرسالة بناءً على نوع البيع
             if exit_type == "trailing_stop":
                 message = (
@@ -1359,11 +1594,17 @@ class Crypto_Trading_Bot:
                     f"الربح/الخسارة: ${profit_loss:.2f}\n"
                     f"وقت التنفيذ: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}"
                 )
-    
+ 
             self.send_notification(message)
-    
+ 
+            # تحليل الأداء
+            if profit_loss != 0:
+                self.learning_system.analyze_trade_performance(
+                    profit_loss, signal_strength, dynamic_weights or {}, symbol
+                )
+ 
             return True, "تم تنفيذ أمر البيع بنجاح"
-    
+
         except Exception as e:
             error_msg = f"❌ خطأ في تنفيذ أمر البيع لـ {symbol}: {e}"
             logger.error(error_msg)
@@ -1393,15 +1634,15 @@ class Crypto_Trading_Bot:
             return False
 
     def run_trading_cycle(self):
-        """تشغيل دورة تداول كاملة"""
+        """تشغيل دورة تداول كاملة مع النظام الجديد"""
         try:
             logger.info("=" * 50)
             logger.info(f"بدء دورة التداول - {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
-    
+
             # التحقق من حد الخسارة اليومي
             current_balance = self.get_real_balance()
             trading_enabled, daily_loss_pct = self.performance_analyzer.check_daily_loss_limit(current_balance)
-    
+
             if not trading_enabled:
                 message = (
                     f"⏸️ <b>تم إيقاف التداول اليومي</b>\n\n"
@@ -1418,47 +1659,47 @@ class Crypto_Trading_Bot:
                 try:
                     ticker = self.client.get_symbol_ticker(symbol=symbol)
                     current_price = float(ticker['price'])
-        
+    
                     # سجل معلومات التتبع
                     if symbol in self.active_trailing_stops:
                         logger.info(f"🔄 تحديث التريلينغ ستوب لـ {symbol}")
-            
+        
                     if self.update_trailing_stops(symbol, current_price):
                         logger.info(f"🎯 تم触发 التريلينغ ستوب لـ {symbol} - البيع")
                         self.execute_sell_order(symbol, 100, "trailing_stop")
-            
+        
                 except Exception as e:
                     logger.error(f"خطأ في التريلينغ ستوب لـ {symbol}: {e}")
-    
+
             # تحليل كل عملة وجمع النتائج
             analysis_results = []
             trade_actions = []
             detailed_analysis = []
-    
+
             for symbol in self.symbols:
                 try:
                     logger.info(f"تحليل {symbol}...")
-            
+        
                     # جلب البيانات التاريخية
                     data = self.get_historical_data(symbol)
                     if data is None or len(data) < 50:
                         logger.warning(f"بيانات غير كافية لـ {symbol}")
                         analysis_results.append(f"❌ {symbol}: بيانات غير كافية")
                         continue
-            
+        
                     # حساب المؤشرات الفنية
                     data = self.calculate_technical_indicators(data)
                     latest = data.iloc[-1]
-            
-                    # حساب قوة الإشارة
-                    buy_signal = self.calculate_signal_strength(data, 'buy')
-                    sell_signal = self.calculate_signal_strength(data, 'sell')
+        
+                    # حساب قوة الإشارة مع الأوزان الديناميكية
+                    buy_signal, buy_weights = self.calculate_signal_strength(data, 'buy')
+                    sell_signal, sell_weights = self.calculate_signal_strength(data, 'sell')
 
                     current_price = latest['close']
                     key_level = self.check_key_levels(symbol, current_price, data)
 
                     logger.info(f"{symbol} - إشارة الشراء: {buy_signal:.1f}%, إشارة البيع: {sell_signal:.1f}%")
-            
+        
                     # جمع التحليل التفصيلي
                     bb_position = ((latest['close'] - latest['bb_lower']) / (latest['bb_upper'] - latest['bb_lower']) * 100) if (latest['bb_upper'] - latest['bb_lower']) > 0 else 0
                     # حساب نسبة الحجم مع معالجة الأخطاء
@@ -1473,7 +1714,7 @@ class Crypto_Trading_Bot:
                             volume_ratio = 1.0
                     except:
                         volume_ratio = 1.0
-                
+            
                     detailed_analysis.append(
                         f"• {symbol}:\n"
                         f"  📊 السعر: ${latest['close']:.2f}\n"
@@ -1483,61 +1724,61 @@ class Crypto_Trading_Bot:
                         f"  📦 الحجم: {latest['volume']:.0f} ({min(max(volume_ratio, 0.1), 10):.1f}x المتوسط)\n"
                         f"  🎯 الإشارات: شراء {buy_signal:.1f}% | بيع {sell_signal:.1f}%"
                     )
-            
+        
                     # جمع نتائج التحليل
                     signal_status = ""
                     action_taken = ""
-            
+        
                     if buy_signal >= self.BASELINE_BUY_THRESHOLD:
                         signal_status = "🟢 شراء"
-                
+            
                         if key_level == "near_resistance":
                             resistance_price = data['bb_upper'].iloc[-1]
                             distance_pct = ((resistance_price - current_price) / resistance_price) * 100
-                    
+                
                             skip_message = f"⏭️ تخطي الشراء - قريب من المقاومة ({distance_pct:.2f}%)"
                             logger.info(skip_message)
                             action_taken = f"❌ تخطي شراء: قريب من المقاومة ({distance_pct:.2f}% تحت)"
-                
+            
                         else:
                             order_status = self.get_order_space_status(symbol)
                             if order_status == "NEAR_FULL" and buy_signal < self.STRICT_BUY_THRESHOLD:
                                 skip_message = f"⏭️ تخطي الشراء - إشارة غير قوية كفاية"
                                 logger.info(skip_message)
                                 action_taken = "❌ تخطي شراء: إشارة ضعيفة للأوامر الممتلئة"
-                    
+                
                             else:
-                                success, message = self.execute_buy_order(symbol, buy_signal)
+                                success, message = self.execute_buy_order(symbol, buy_signal, buy_weights)
                                 logger.info(f"نتيجة أمر الشراء: {message}")
                                 action_taken = f"✅ تم الشراء: {buy_signal:.1f}%"
-            
+        
                     elif sell_signal >= self.SELL_THRESHOLD:
                         signal_status = "🔴 بيع"
-                
+            
                         if key_level == "near_support":
                             support_price = data['bb_lower'].iloc[-1]
                             distance_pct = ((current_price - support_price) / support_price) * 100
-                    
+                
                             skip_message = f"⏭️ تخطي البيع - قريب من الدعم ({distance_pct:.2f}%)"
                             logger.info(skip_message)
                             action_taken = f"❌ تخطي بيع: قريب من الدعم ({distance_pct:.2f}% فوق)"
-                
+            
                         else:
                             order_status = self.get_order_space_status(symbol)
                             if order_status == "NEAR_FULL" and sell_signal < (self.SELL_THRESHOLD + 10):
                                 skip_message = f"⏭️ تخطي البيع - إشارة غير قوية كفاية"
                                 logger.info(skip_message)
                                 action_taken = "❌ تخطي بيع: إشارة ضعيفة للأوامر الممتلئة"
-                    
+                
                             else:
-                                success, message = self.execute_sell_order(symbol, sell_signal)
+                                success, message = self.execute_sell_order(symbol, sell_signal, None, sell_weights)
                                 logger.info(f"نتيجة أمر البيع: {message}")
                                 action_taken = f"✅ تم البيع: {sell_signal:.1f}%"
-            
+        
                     else:
                         signal_status = "🟡 لا شيء"
                         action_taken = "➡️ لا إجراء: إشارات ضعيفة"
-            
+         
                     # إضافة النتائج للتحليل
                     level_info = ""
                     if key_level == "near_resistance":
@@ -1548,37 +1789,37 @@ class Crypto_Trading_Bot:
                         support_price = data['bb_lower'].iloc[-1]
                         distance_pct = ((current_price - support_price) / support_price) * 100
                         level_info = f" | 📉 {distance_pct:.2f}% فوق الدعم"
-            
+        
                     analysis_results.append(
                         f"• {symbol}: الشراء {buy_signal:.1f}% | البيع {sell_signal:.1f}% | {signal_status}{level_info}"
                     )
-            
+         
                     # إضافة الإجراءات المتخذة
                     if action_taken:
                         trade_actions.append(f"• {symbol}: {action_taken}")
-                
+            
                 except Exception as e:
                     error_msg = f"❌ خطأ في معالجة {symbol}: {e}"
                     logger.error(error_msg)
                     analysis_results.append(f"❌ {symbol}: خطأ في المعالجة")
                     trade_actions.append(f"• {symbol}: ❌ خطأ: {str(e)}")
                     continue
-        
+    
                 # تأجيل بين العملات
                 time.sleep(5)
-    
+
             # حساب أداء اليوم
             performance = self.performance_analyzer.calculate_daily_performance(current_balance)
-        
+    
             # إنشاء التوصيات
             recommendations = self.generate_recommendations(performance)
-        
+    
             # إرسال رسالة واحدة بنتائج جميع العملات
             if self.notifier:
                 # الحصول على الرصيد التفصيلي
                 detailed_balances = self.get_detailed_asset_balances()
                 balance_details = "\n".join([f"• {balance}" for balance in detailed_balances])
-    
+
                 # إنشاء النص المبسط للتحليل
                 simplified_analysis = []
                 for symbol in self.symbols:
@@ -1587,9 +1828,9 @@ class Crypto_Trading_Bot:
                         if data is not None and len(data) >= 50:
                             data = self.calculate_technical_indicators(data)
                             latest = data.iloc[-1]
-                            buy_signal = self.calculate_signal_strength(data, 'buy')
-                            sell_signal = self.calculate_signal_strength(data, 'sell')
-                
+                            buy_signal, _ = self.calculate_signal_strength(data, 'buy')
+                            sell_signal, _ = self.calculate_signal_strength(data, 'sell')
+            
                             simplified_analysis.append(
                                 f"• {symbol}:\n"
                                 f"  📊 السعر: ${latest['close']:.2f}\n"
@@ -1612,12 +1853,16 @@ class Crypto_Trading_Bot:
                     f"• الأوامر النشطة: {self.get_total_orders_count()}\n\n"
                     f"⏰ وقت الدورة: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}"
                 )
-    
+
                 self.notifier.send_message(summary_msg)
-    
+ 
+            # مراجعة أسبوعية
+            if datetime.now().weekday() == 0:  # كل يوم اثنين
+                self.learning_system.weekly_review()
+
             logger.info(f"انتهت دورة التداول - {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
             logger.info("=" * 50)
-    
+
         except Exception as e:
             logger.error(f"❌ خطأ في دورة التداول: {e}")
             if self.notifier:
