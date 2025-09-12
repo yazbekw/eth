@@ -1196,7 +1196,7 @@ class Crypto_Trading_Bot:
             logger.error(f"خطأ في حساب ADX: {e}")
             return None, None, None
 
-   def calculate_signal_strength(self, data, signal_type='buy'):
+    def calculate_signal_strength(self, data, signal_type='buy'):
         """تقييم قوة الإشارة مع الأوزان الديناميكية"""
         try:
             # تحليل ظروف السوق الحالية
