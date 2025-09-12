@@ -362,6 +362,40 @@ class MarketConditionAnalyzer:
             logger.error(f"خطأ في تحديد قوة الاتجاه: {e}")
             return 'WEAK'
 
+    def calculate_adx(self, data, period=14):
+        """حساب مؤشر ADX (Average Directional Index)"""
+        try:
+            high = data['high']
+            low = data['low']
+            close = data['close']
+        
+            # حساب +DM و -DM
+            up_move = high.diff()
+            down_move = low.diff().abs() * -1
+        
+            plus_dm = np.where((up_move > down_move) & (up_move > 0), up_move, 0)
+            minus_dm = np.where((down_move > up_move) & (down_move > 0), down_move, 0)
+        
+            # حساب True Range
+            tr1 = high - low
+            tr2 = (high - close.shift()).abs()
+            tr3 = (low - close.shift()).abs()
+            tr = pd.concat([tr1, tr2, tr3], axis=1).max(axis=1)
+        
+            # حساب المتوسطات
+            atr = tr.rolling(period).mean()
+            plus_di = 100 * (pd.Series(plus_dm).rolling(period).mean() / atr)
+            minus_di = 100 * (pd.Series(minus_dm).rolling(period).mean() / atr)
+        
+            # حساب ADX
+            dx = 100 * ((plus_di - minus_di).abs() / (plus_di + minus_di))
+            adx = dx.rolling(period).mean()
+        
+            return adx, plus_di, minus_di
+        except Exception as e:
+            logger.error(f"خطأ في حساب ADX: {e}")
+            return None, None, None
+
     def analyze_market_condition(self, data):
         """تحليل ظروف السوق من البيانات"""
         try:
@@ -1162,39 +1196,7 @@ class Crypto_Trading_Bot:
             logger.error(f"خطأ في إدارة المساحة: {e}")
             return False
     
-    def calculate_adx(self, data, period=14):
-        """حساب مؤشر ADX (Average Directional Index)"""
-        try:
-            high = data['high']
-            low = data['low']
-            close = data['close']
-            
-            # حساب +DM و -DM
-            up_move = high.diff()
-            down_move = low.diff().abs() * -1
-            
-            plus_dm = np.where((up_move > down_move) & (up_move > 0), up_move, 0)
-            minus_dm = np.where((down_move > up_move) & (down_move > 0), down_move, 0)
-            
-            # حساب True Range
-            tr1 = high - low
-            tr2 = (high - close.shift()).abs()
-            tr3 = (low - close.shift()).abs()
-            tr = pd.concat([tr1, tr2, tr3], axis=1).max(axis=1)
-            
-            # حساب المتوسطات
-            atr = tr.rolling(period).mean()
-            plus_di = 100 * (pd.Series(plus_dm).rolling(period).mean() / atr)
-            minus_di = 100 * (pd.Series(minus_dm).rolling(period).mean() / atr)
-            
-            # حساب ADX
-            dx = 100 * ((plus_di - minus_di).abs() / (plus_di + minus_di))
-            adx = dx.rolling(period).mean()
-            
-            return adx, plus_di, minus_di
-        except Exception as e:
-            logger.error(f"خطأ في حساب ADX: {e}")
-            return None, None, None
+   
 
     def calculate_signal_strength(self, data, signal_type='buy'):
         """تقييم قوة الإشارة مع الأوزان الديناميكية"""
@@ -1254,7 +1256,7 @@ class Crypto_Trading_Bot:
     def calculate_adx_score(self, data, signal_type):
         """حساب درجة ADX"""
         try:
-            adx, plus_di, minus_di = self.calculate_adx(data)  # إذا كانت static
+            adx, plus_di, minus_di = self.market_analyzer.calculate_adx(data)
             if adx is None:
                 return 0
                 
