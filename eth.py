@@ -14,6 +14,8 @@ from dotenv import load_dotenv
 from flask import Flask
 import threading
 import json
+from pymongo import MongoClient
+from pymongo.errors import ConnectionFailure
 
 # تحميل متغيرات البيئة
 load_dotenv()
@@ -44,6 +46,40 @@ def daily_report():
         bot = Crypto_Trading_Bot()
         report = bot.generate_daily_performance_report()
         return report
+    except Exception as e:
+        return {'error': str(e)}
+
+@app.route('/mango/trades')
+def mango_trades():
+    try:
+        bot = Crypto_Trading_Bot()
+        symbol = request.args.get('symbol')
+        limit = int(request.args.get('limit', 50))
+        
+        trades = bot.mango_db.get_recent_trades(symbol, limit)
+        return jsonify({'trades': trades, 'count': len(trades)})
+    except Exception as e:
+        return {'error': str(e)}
+
+@app.route('/mango/performance')
+def mango_performance():
+    try:
+        bot = Crypto_Trading_Bot()
+        date = request.args.get('date')
+        
+        performance = bot.mango_db.get_daily_performance(date)
+        return jsonify(performance if performance else {'message': 'No data found'})
+    except Exception as e:
+        return {'error': str(e)}
+
+@app.route('/mango/cleanup')
+def mango_cleanup():
+    try:
+        bot = Crypto_Trading_Bot()
+        days = int(request.args.get('days', 30))
+        
+        success = bot.mango_db.cleanup_old_data(days)
+        return {'success': success, 'message': f'Cleaned up data older than {days} days'}
     except Exception as e:
         return {'error': str(e)}
 
@@ -88,6 +124,132 @@ class TelegramNotifier:
         except Exception as e:
             error_msg = f"خطأ في إرسال رسالة Telegram: {e}"
             logger.error(error_msg)
+            return False
+
+class MangoDBManager:
+    def __init__(self, connection_string=None, db_name="crypto_trading_bot"):
+        self.connection_string = connection_string or os.environ.get('MANGO_DB_CONNECTION_STRING')
+        self.db_name = db_name
+        self.client = None
+        self.db = None
+        self.connect()
+        
+    def connect(self):
+        """الاتصال بقاعدة بيانات MangoDB"""
+        try:
+            if not self.connection_string:
+                logger.warning("❌ رابط اتصال MangoDB غير موجود")
+                return False
+                
+            self.client = MongoClient(self.connection_string, serverSelectionTimeoutMS=5000)
+            # اختبار الاتصال
+            self.client.admin.command('ping')
+            self.db = self.client[self.db_name]
+            logger.info("✅ تم الاتصال بنجاح بـ MangoDB")
+            return True
+            
+        except ConnectionFailure as e:
+            logger.error(f"❌ فشل الاتصال بـ MangoDB: {e}")
+            return False
+        except Exception as e:
+            logger.error(f"❌ خطأ في الاتصال بـ MangoDB: {e}")
+            return False
+    
+    def insert_trade(self, trade_data):
+        """إدراج صفقة جديدة"""
+        try:
+            if not self.db:
+                return False
+                
+            collection = self.db['trades']
+            result = collection.insert_one(trade_data)
+            logger.debug(f"تم حفظ الصفقة في MangoDB: {result.inserted_id}")
+            return True
+            
+        except Exception as e:
+            logger.error(f"خطأ في حفظ الصفقة في MangoDB: {e}")
+            return False
+    
+    def insert_performance_data(self, performance_data):
+        """إدراج بيانات أداء"""
+        try:
+            if not self.db:
+                return False
+                
+            collection = self.db['performance']
+            result = collection.insert_one(performance_data)
+            return True
+            
+        except Exception as e:
+            logger.error(f"خطأ في حفظ بيانات الأداء في MangoDB: {e}")
+            return False
+    
+    def get_recent_trades(self, symbol=None, limit=50):
+        """جلب أحدث الصفقات"""
+        try:
+            if not self.db:
+                return []
+                
+            collection = self.db['trades']
+            query = {} if not symbol else {'symbol': symbol}
+            trades = list(collection.find(query)
+                .sort('timestamp', -1)
+                .limit(limit))
+            
+            # تحويل ObjectId إلى string للتسلسل
+            for trade in trades:
+                trade['_id'] = str(trade['_id'])
+                
+            return trades
+            
+        except Exception as e:
+            logger.error(f"خطأ في جلب الصفقات من MangoDB: {e}")
+            return []
+    
+    def get_daily_performance(self, date=None):
+        """جلب أداء يومي"""
+        try:
+            if not self.db:
+                return {}
+                
+            collection = self.db['performance']
+            target_date = date or datetime.now().strftime("%Y-%m-%d")
+            
+            performance = collection.find_one({'date': target_date})
+            if performance:
+                performance['_id'] = str(performance['_id'])
+                
+            return performance
+            
+        except Exception as e:
+            logger.error(f"خطأ في جلب الأداء اليومي من MangoDB: {e}")
+            return {}
+    
+    def cleanup_old_data(self, days_to_keep=30):
+        """تنظيف البيانات الأقدم من عدد محدد من الأيام"""
+        try:
+            if not self.db:
+                return False
+                
+            cutoff_date = datetime.now() - timedelta(days=days_to_keep)
+            
+            # تنظيف الصفقات القديمة
+            trades_collection = self.db['trades']
+            trades_result = trades_collection.delete_many({
+                'timestamp': {'$lt': cutoff_date.isoformat()}
+            })
+            
+            # تنظيف بيانات الأداء القديمة
+            performance_collection = self.db['performance']
+            performance_result = performance_collection.delete_many({
+                'date': {'$lt': cutoff_date.strftime("%Y-%m-%d")}
+            })
+            
+            logger.info(f"تم تنظيف {trades_result.deleted_count} صفقة و {performance_result.deleted_count} سجل أداء قديم")
+            return True
+            
+        except Exception as e:
+            logger.error(f"خطأ في تنظيف البيانات القديمة من MangoDB: {e}")
             return False
 
 class PerformanceAnalyzer:
@@ -410,6 +572,7 @@ class Crypto_Trading_Bot:
         self.performance_analyzer = PerformanceAnalyzer()
         self.load_trade_history()
         self.last_buy_prices = {} 
+		self.mango_db = MangoDBManager()
         
         # إعدادات العتبات الجديدة
         self.BASELINE_BUY_THRESHOLD = 35
@@ -600,6 +763,9 @@ class Crypto_Trading_Bot:
         self.performance_analyzer.add_trade(trade_record)
         self.save_trade_history()
 
+   	    # حفظ في MangoDB
+        self.mango_db.insert_trade(trade_record)
+
     def generate_12h_trading_report(self):
         """إنشاء تقرير التداول لآخر 12 ساعة"""
         try:
@@ -715,6 +881,16 @@ class Crypto_Trading_Bot:
                         'win_rate': symbol_win_rate,
                         'total_profit': symbol_total_profit
                     }
+			report = {
+                "date": datetime.now().strftime("%Y-%m-%d"),
+                "performance": performance,
+                "signal_analysis": signal_analysis,
+                "symbol_performance": symbol_performance,
+                "recommendations": recommendations
+            }
+        
+            # حفظ في MangoDB
+            self.mango_db.insert_performance_data(report)
             
             report = {
                 "date": datetime.now().strftime("%Y-%m-%d"),
