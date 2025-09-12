@@ -622,7 +622,7 @@ class Crypto_Trading_Bot:
             self.performance_analyzer.daily_start_balance = self.initial_balance
         
             # إضافة الأنظمة الجديدة
-            self.market_analyzer = MarketConditionAnalyzer(self)  # تمرير reference للبوت
+            self.market_analyzer = MarketConditionAnalyzer() # تمرير reference للبوت
             self.learning_system = LearningSystem()
             
             detailed_balance = self.get_detailed_balance()
@@ -1254,7 +1254,7 @@ class Crypto_Trading_Bot:
     def calculate_adx_score(self, data, signal_type):
         """حساب درجة ADX"""
         try:
-            adx, plus_di, minus_di = Crypto_Trading_Bot.calculate_adx(data)  # إذا كانت static
+            adx, plus_di, minus_di = self.calculate_adx(data)  # إذا كانت static
             if adx is None:
                 return 0
                 
