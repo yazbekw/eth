@@ -572,7 +572,7 @@ class Crypto_Trading_Bot:
         self.performance_analyzer = PerformanceAnalyzer()
         self.load_trade_history()
         self.last_buy_prices = {} 
-		self.mango_db = MangoDBManager()
+        self.mango_db = MangoDBManager()
         
         # إعدادات العتبات الجديدة
         self.BASELINE_BUY_THRESHOLD = 35
