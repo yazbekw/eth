@@ -1197,16 +1197,15 @@ class Crypto_Trading_Bot:
             return False
     
    
-
     def calculate_signal_strength(self, data, signal_type='buy'):
-        """تقييم قوة الإشارة مع الأوزان الديناميكية"""
+        """تقييم قوة الإشارة مع الأوزان الديناميكية وعرض مساهمة كل مؤشر"""
         try:
             # تحليل ظروف السوق الحالية
             market_conditions = self.market_analyzer.analyze_market_condition(data)
-        
+    
             # حساب الأوزان الديناميكية
             dynamic_weights = self.market_analyzer.calculate_dynamic_weights(market_conditions)
-        
+    
             # حساب مساهمة كل مؤشر مع الأوزان الجديدة
             indicator_contributions = {}
             indicator_contributions['market_trend'] = self.calculate_market_trend_score(data, signal_type) * (dynamic_weights['market_trend'] / 100)
@@ -1238,20 +1237,19 @@ class Crypto_Trading_Bot:
 
             # تخزين مساهمات المؤشرات
             if signal_type == 'buy':
-                self.last_buy_contributions = indicator_contributions
+                self.last_buy_contributions = indicator_contributions.copy()
             else:
-                self.last_sell_contributions = indicator_contributions
+                self.last_sell_contributions = indicator_contributions.copy()
 
             final_score = max(min(combined_score, 100), -100)
-        
+    
             logger.debug(f"إشارة {signal_type} - النتيجة: {final_score:.1f}%, الأوزان: {dynamic_weights}")
-        
-            return final_score, dynamic_weights
-        
+    
+            return final_score, dynamic_weights, indicator_contributions
+    
         except Exception as e:
             logger.error(f"خطأ في حساب قوة الإشارة: {e}")
-            return 0, self.market_analyzer.WEIGHT_MATRIX['RANGING']
-
+            return 0, self.market_analyzer.WEIGHT_MATRIX['RANGING'], {}
 	   
     def calculate_adx_score(self, data, signal_type):
         """حساب درجة ADX"""
@@ -1811,8 +1809,8 @@ class Crypto_Trading_Bot:
             logger.error(f"❌ فشل اختبار التريلينغ ستوب: {e}")
             return False
 
-    def run_trading_cycle(self):
-        """تشغيل دورة تداول كاملة مع النظام الجديد"""
+     def run_trading_cycle(self):
+        """تشغيل دورة تداول كاملة مع عرض مساهمة المؤشرات"""
         try:
             logger.info("=" * 50)
             logger.info(f"بدء دورة التداول - {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
@@ -1837,15 +1835,11 @@ class Crypto_Trading_Bot:
                 try:
                     ticker = self.client.get_symbol_ticker(symbol=symbol)
                     current_price = float(ticker['price'])
-    
-                    # سجل معلومات التتبع
-                    if symbol in self.active_trailing_stops:
-                        logger.info(f"🔄 تحديث التريلينغ ستوب لـ {symbol}")
-        
-                    if self.update_trailing_stops(symbol, current_price):
+
+                    if symbol in self.active_trailing_stops and self.update_trailing_stops(symbol, current_price):
                         logger.info(f"🎯 تم触发 التريلينغ ستوب لـ {symbol} - البيع")
                         self.execute_sell_order(symbol, 100, "trailing_stop")
-        
+    
                 except Exception as e:
                     logger.error(f"خطأ في التريلينغ ستوب لـ {symbol}: {e}")
 
@@ -1853,183 +1847,120 @@ class Crypto_Trading_Bot:
             analysis_results = []
             trade_actions = []
             detailed_analysis = []
+            indicator_contributions_all = {}  # تخزين مساهمات المؤشرات لكل عملة
 
             for symbol in self.symbols:
                 try:
                     logger.info(f"تحليل {symbol}...")
-        
+    
                     # جلب البيانات التاريخية
                     data = self.get_historical_data(symbol)
                     if data is None or len(data) < 50:
                         logger.warning(f"بيانات غير كافية لـ {symbol}")
-                        analysis_results.append(f"❌ {symbol}: بيانات غير كافية")
                         continue
-        
+    
                     # حساب المؤشرات الفنية
                     data = self.calculate_technical_indicators(data)
                     latest = data.iloc[-1]
-        
-                    # حساب قوة الإشارة مع الأوزان الديناميكية
-                    buy_signal, buy_weights = self.calculate_signal_strength(data, 'buy')
-                    sell_signal, sell_weights = self.calculate_signal_strength(data, 'sell')
+
+                    # حساب قوة الإشارة مع الأوزان الديناميكية ومساهمات المؤشرات
+                    buy_signal, buy_weights, buy_contributions = self.calculate_signal_strength(data, 'buy')
+                    sell_signal, sell_weights, sell_contributions = self.calculate_signal_strength(data, 'sell')
+
+                    # حفظ مساهمات المؤشرات
+                    indicator_contributions_all[symbol] = {
+                        'buy': buy_contributions,
+                        'sell': sell_contributions,
+                        'buy_weights': buy_weights,
+                        'sell_weights': sell_weights
+                    }
 
                     current_price = latest['close']
                     key_level = self.check_key_levels(symbol, current_price, data)
 
                     logger.info(f"{symbol} - إشارة الشراء: {buy_signal:.1f}%, إشارة البيع: {sell_signal:.1f}%")
-        
+    
                     # جمع التحليل التفصيلي
                     bb_position = ((latest['close'] - latest['bb_lower']) / (latest['bb_upper'] - latest['bb_lower']) * 100) if (latest['bb_upper'] - latest['bb_lower']) > 0 else 0
-                    # حساب نسبة الحجم مع معالجة الأخطاء
-                    try:
-                        if latest['volume_ma'] > 0:
-                            volume_ratio = latest['volume'] / latest['volume_ma']
-                            # معالجة القيم الشاذة
-                            if volume_ratio < 0.1: volume_ratio = 0.1
-                            if volume_ratio > 10: volume_ratio = 10
-                            if np.isinf(volume_ratio) or np.isnan(volume_ratio): volume_ratio = 1.0
-                        else:
-                            volume_ratio = 1.0
-                    except:
-                        volume_ratio = 1.0
-            
+                
+                    volume_ratio = 1.0
+                    if latest['volume_ma'] > 0:
+                        volume_ratio = latest['volume'] / latest['volume_ma']
+                        volume_ratio = max(0.1, min(10, volume_ratio))
+                
+                    # إنشاء نص مساهمة المؤشرات للشراء
+                    buy_contrib_text = "\n".join([f"    {ind}: {cont:.1f}%" for ind, cont in buy_contributions.items()])
+                
+                    # إنشاء نص مساهمة المؤشرات للبيع
+                    sell_contrib_text = "\n".join([f"    {ind}: {cont:.1f}%" for ind, cont in sell_contributions.items()])
+
                     detailed_analysis.append(
                         f"• {symbol}:\n"
                         f"  📊 السعر: ${latest['close']:.2f}\n"
                         f"  📈 RSI: {latest['rsi']:.1f}\n"
                         f"  🔵 MACD: {latest['macd']:.3f}\n"
                         f"  📍 موقع البولينجر: {bb_position:.1f}%\n"
-                        f"  📦 الحجم: {latest['volume']:.0f} ({min(max(volume_ratio, 0.1), 10):.1f}x المتوسط)\n"
-                        f"  🎯 الإشارات: شراء {buy_signal:.1f}% | بيع {sell_signal:.1f}%"
+                        f"  📦 الحجم: {volume_ratio:.1f}x المتوسط\n"
+                        f"  🎯 إشارة الشراء: {buy_signal:.1f}%\n"
+                        f"  📊 مساهمات الشراء:\n{buy_contrib_text}\n"
+                        f"  🎯 إشارة البيع: {sell_signal:.1f}%\n"
+                        f"  📊 مساهمات البيع:\n{sell_contrib_text}"
                     )
-        
-                    # جمع نتائج التحليل
+    
+                    # تنفيذ الأوامر بناء على الإشارات
                     signal_status = ""
                     action_taken = ""
-        
-                    if buy_signal >= self.BASELINE_BUY_THRESHOLD:
-                        signal_status = "🟢 شراء"
-            
-                        if key_level == "near_resistance":
-                            resistance_price = data['bb_upper'].iloc[-1]
-                            distance_pct = ((resistance_price - current_price) / resistance_price) * 100
-                
-                            skip_message = f"⏭️ تخطي الشراء - قريب من المقاومة ({distance_pct:.2f}%)"
-                            logger.info(skip_message)
-                            action_taken = f"❌ تخطي شراء: قريب من المقاومة ({distance_pct:.2f}% تحت)"
-            
+    
+                    if buy_signal >= self.BASELINE_BUY_THRESHOLD and key_level != "near_resistance":
+                        if self.get_order_space_status(symbol) != "FULL":
+                            success, message = self.execute_buy_order(symbol, buy_signal, buy_weights)
+                            action_taken = f"✅ تم الشراء: {buy_signal:.1f}%"
                         else:
-                            order_status = self.get_order_space_status(symbol)
-                            if order_status == "NEAR_FULL" and buy_signal < self.STRICT_BUY_THRESHOLD:
-                                skip_message = f"⏭️ تخطي الشراء - إشارة غير قوية كفاية"
-                                logger.info(skip_message)
-                                action_taken = "❌ تخطي شراء: إشارة ضعيفة للأوامر الممتلئة"
-                
-                            else:
-                                success, message = self.execute_buy_order(symbol, buy_signal, buy_weights)
-                                logger.info(f"نتيجة أمر الشراء: {message}")
-                                action_taken = f"✅ تم الشراء: {buy_signal:.1f}%"
-        
-                    elif sell_signal >= self.SELL_THRESHOLD:
-                        signal_status = "🔴 بيع"
-            
-                        if key_level == "near_support":
-                            support_price = data['bb_lower'].iloc[-1]
-                            distance_pct = ((current_price - support_price) / support_price) * 100
-                
-                            skip_message = f"⏭️ تخطي البيع - قريب من الدعم ({distance_pct:.2f}%)"
-                            logger.info(skip_message)
-                            action_taken = f"❌ تخطي بيع: قريب من الدعم ({distance_pct:.2f}% فوق)"
-            
+                            action_taken = "❌ تخطي شراء: الأوامر ممتلئة"
+    
+                    elif sell_signal >= self.SELL_THRESHOLD and key_level != "near_support":
+                        if self.get_order_space_status(symbol) != "FULL":
+                            success, message = self.execute_sell_order(symbol, sell_signal, None, sell_weights)
+                            action_taken = f"✅ تم البيع: {sell_signal:.1f}%"
                         else:
-                            order_status = self.get_order_space_status(symbol)
-                            if order_status == "NEAR_FULL" and sell_signal < (self.SELL_THRESHOLD + 10):
-                                skip_message = f"⏭️ تخطي البيع - إشارة غير قوية كفاية"
-                                logger.info(skip_message)
-                                action_taken = "❌ تخطي بيع: إشارة ضعيفة للأوامر الممتلئة"
-                
-                            else:
-                                success, message = self.execute_sell_order(symbol, sell_signal, None, sell_weights)
-                                logger.info(f"نتيجة أمر البيع: {message}")
-                                action_taken = f"✅ تم البيع: {sell_signal:.1f}%"
-        
+                            action_taken = "❌ تخطي بيع: الأوامر ممتلئة"
+    
                     else:
-                        signal_status = "🟡 لا شيء"
-                        action_taken = "➡️ لا إجراء: إشارات ضعيفة"
-         
+                        action_taken = "➡️ لا إجراء: إشارات ضعيفة أو قريب من مستويات رئيسية"
+     
                     # إضافة النتائج للتحليل
-                    level_info = ""
-                    if key_level == "near_resistance":
-                        resistance_price = data['bb_upper'].iloc[-1]
-                        distance_pct = ((resistance_price - current_price) / resistance_price) * 100
-                        level_info = f" | 📈 {distance_pct:.2f}% تحت المقاومة"
-                    elif key_level == "near_support":
-                        support_price = data['bb_lower'].iloc[-1]
-                        distance_pct = ((current_price - support_price) / support_price) * 100
-                        level_info = f" | 📉 {distance_pct:.2f}% فوق الدعم"
-        
-                    analysis_results.append(
-                        f"• {symbol}: الشراء {buy_signal:.1f}% | البيع {sell_signal:.1f}% | {signal_status}{level_info}"
-                    )
-         
+                    analysis_results.append(f"• {symbol}: شراء {buy_signal:.1f}% | بيع {sell_signal:.1f}%")
+                
                     # إضافة الإجراءات المتخذة
                     if action_taken:
                         trade_actions.append(f"• {symbol}: {action_taken}")
-            
+        
                 except Exception as e:
                     error_msg = f"❌ خطأ في معالجة {symbol}: {e}"
                     logger.error(error_msg)
-                    analysis_results.append(f"❌ {symbol}: خطأ في المعالجة")
                     trade_actions.append(f"• {symbol}: ❌ خطأ: {str(e)}")
                     continue
-    
-                # تأجيل بين العملات
-                time.sleep(5)
 
-            # حساب أداء اليوم
-            performance = self.performance_analyzer.calculate_daily_performance(current_balance)
-    
-            # إنشاء التوصيات
-            recommendations = self.generate_recommendations(performance)
-    
-            # إرسال رسالة واحدة بنتائج جميع العملات
-            if self.notifier:
+                # تأجيل بين العملات
+                time.sleep(2)
+
+            # إرسال رسالة تلغرام مفصلة بمساهمات المؤشرات
+            if self.notifier and detailed_analysis:
                 # الحصول على الرصيد التفصيلي
                 detailed_balances = self.get_detailed_asset_balances()
                 balance_details = "\n".join([f"• {balance}" for balance in detailed_balances])
 
-                # إنشاء النص المبسط للتحليل
-                simplified_analysis = []
-                for symbol in self.symbols:
-                    try:
-                        data = self.get_historical_data(symbol)
-                        if data is not None and len(data) >= 50:
-                            data = self.calculate_technical_indicators(data)
-                            latest = data.iloc[-1]
-                            buy_signal, _ = self.calculate_signal_strength(data, 'buy')
-                            sell_signal, _ = self.calculate_signal_strength(data, 'sell')
-            
-                            simplified_analysis.append(
-                                f"• {symbol}:\n"
-                                f"  📊 السعر: ${latest['close']:.2f}\n"
-                                f"  🎯 الإشارات: شراء {buy_signal:.1f}% | بيع {sell_signal:.1f}%"
-                            )
-                    except:
-                        continue
-
-                simplified_text = "\n".join(simplified_analysis) if simplified_analysis else "• لا توجد بيانات تحليل"
-                actions_text = "\n".join(trade_actions) if trade_actions else "• لا توجد إجراءات"
-
                 summary_msg = (
-                    f"📊 <b>ملخص دورة التداول الشامل</b>\n\n"
-                    f"<b>📈 التحليل الفني التفصيلي:</b>\n{simplified_text}\n\n"
-                    f"<b>⚡ الإجراءات المتخذة:</b>\n{actions_text}\n\n"
-                    f"<b>💰 الأداء المالي:</b>\n"
-                    f"• الرصيد الحالي: ${current_balance:.2f}\n\n"
-                    f"<b>💼 الرصيد التفصيلي:</b>\n{balance_details}\n\n"
-                    f"<b>📊 إحصائيات التداول:</b>\n"
+                    f"📊 <b>تقرير دورة التداول التفصيلي</b>\n\n"
+                    f"<b>🔍 تحليل المؤشرات لكل عملة:</b>\n"
+                    f"{chr(10).join(detailed_analysis)}\n\n"
+                    f"<b>⚡ الإجراءات المتخذة:</b>\n"
+                    f"{chr(10).join(trade_actions) if trade_actions else '• لا توجد إجراءات'}\n\n"
+                    f"<b>💰 الرصيد التفصيلي:</b>\n{balance_details}\n\n"
+                    f"<b>📊 إحصائيات:</b>\n"
+                    f"• الرصيد الحالي: ${current_balance:.2f}\n"
                     f"• الأوامر النشطة: {self.get_total_orders_count()}\n\n"
-                    f"⏰ وقت الدورة: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}"
+                    f"⏰ الوقت: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}"
                 )
 
                 self.notifier.send_message(summary_msg)
@@ -2044,8 +1975,7 @@ class Crypto_Trading_Bot:
         except Exception as e:
             logger.error(f"❌ خطأ في دورة التداول: {e}")
             if self.notifier:
-                self.notifier.send_message(f"❌ <b>خطأ في دورة التداول:</b>\n{str(e)}")
-                            
+                self.notifier.send_message(f"❌ <b>خطأ في دورة التداول:</b>\n{str(e)}")                      
             
 def main():
     """الدالة الرئيسية لتشغيل البوت"""
