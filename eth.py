@@ -1809,7 +1809,7 @@ class Crypto_Trading_Bot:
             logger.error(f"❌ فشل اختبار التريلينغ ستوب: {e}")
             return False
 
-     def run_trading_cycle(self):
+    def run_trading_cycle(self):
         """تشغيل دورة تداول كاملة مع عرض مساهمة المؤشرات"""
         try:
             logger.info("=" * 50)
