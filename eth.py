@@ -1201,7 +1201,9 @@ class Crypto_Trading_Bot:
 
     def calculate_signal_strength(self, data, signal_type='buy', symbol='Unknown'):
         """تقييم قوة الإشارة مع الأوزان الديناميكية"""
+        
         try:
+            latest = data.iloc[-1]  # ← أضف هذا السطر هنا
             # تحليل ظروف السوق الحالية
             market_conditions = self.market_analyzer.analyze_market_condition(data)
         
@@ -2016,6 +2018,46 @@ class Crypto_Trading_Bot:
     
             # إنشاء التوصيات
             recommendations = self.generate_recommendations(performance)
+
+            # إنشاء تحليل مفصل للإشارات لإظهاره في التلغرام
+            detailed_analysis_telegram = ""
+            for symbol in self.symbols:
+                try:
+                    data = self.get_historical_data(symbol)
+                    if data is None:
+                        continue
+            
+                    data = self.calculate_technical_indicators(data)
+                    latest = data.iloc[-1]
+        
+                    buy_signal = self.calculate_signal_strength(data, 'buy', symbol)
+                    sell_signal = self.calculate_signal_strength(data, 'sell', symbol)
+        
+                    # الحصول على مساهمات المؤشرات من الذاكرة
+                    buy_contributions = self.last_buy_contributions
+                    sell_contributions = self.last_sell_contributions
+        
+                    detailed_analysis_telegram += (
+                        f"🔍 <b>{symbol}</b>\n"
+                        f"💰 السعر: ${latest['close']:.2f}\n"
+                        f"📊 RSI: {latest['rsi']:.1f}\n"
+                        f"🔵 MACD: {latest['macd']:.3f}\n"
+                        f"📍 البولينجر: {((latest['close'] - latest['bb_lower']) / (latest['bb_upper'] - latest['bb_lower']) * 100):.1f}%\n"
+                        f"🟢 شراء: {buy_signal:.1f}%\n"
+                        f"🔴 بيع: {sell_signal:.1f}%\n"
+                    )
+        
+                    # إضافة مساهمات المؤشرات للشراء
+                    if buy_contributions:
+                        detailed_analysis_telegram += "📈 مساهمات الشراء:\n"
+                        for indicator, value in buy_contributions.items():
+                            detailed_analysis_telegram += f"   • {indicator}: {value:.1f}%\n"
+        
+                    detailed_analysis_telegram += "━━━━━━━━━━━━━━━━━━━━\n\n"
+        
+                except Exception as e:
+                    logger.error(f"خطأ في إنشاء التحليل المفصل لـ {symbol}: {e}")
+                    continue
     
             # إرسال رسالة واحدة بنتائج جميع العملات
             if self.notifier:
@@ -2047,13 +2089,22 @@ class Crypto_Trading_Bot:
 
                 summary_msg = (
                     f"📊 <b>ملخص دورة التداول الشامل</b>\n\n"
-                    f"<b>📈 التحليل الفني التفصيلي:</b>\n{simplified_text}\n\n"
+                    f"<b>📈 التحليل الفني المفصل:</b>\n{detailed_analysis_telegram}\n"
+                    f"<b>🎯 إشارات التداول:</b>\n{results_text}\n\n"
                     f"<b>⚡ الإجراءات المتخذة:</b>\n{actions_text}\n\n"
                     f"<b>💰 الأداء المالي:</b>\n"
-                    f"• الرصيد الحالي: ${current_balance:.2f}\n\n"
-                    f"<b>💼 الرصيد التفصيلي:</b>\n{balance_details}\n\n"
+                    f"• الرصيد الحالي: ${current_balance:.2f}\n"
+                    f"• الربح/الخسارة اليومي: ${performance['daily_pnl']:.2f}\n"
+                    f"• نسبة العائد: {performance['daily_return']:.2f}%\n"
+                    f"• عدد الصفقات: {performance['total_trades']}\n"
+                    f"• نسبة النجاح: {performance['win_rate']:.1f}%\n\n"
                     f"<b>📊 إحصائيات التداول:</b>\n"
-                    f"• الأوامر النشطة: {self.get_total_orders_count()}\n\n"
+                    f"• الأوامر النشطة: {self.get_total_orders_count()}\n"
+                    f"• الصفقات الرابحة: {performance['winning_trades']}\n"
+                    f"• الصفقات الخاسرة: {performance['losing_trades']}\n"
+                    f"• عامل الربحية: {performance['profit_factor']:.2f}\n\n"
+                    f"<b>⚠️ التنبيهات والتوصيات:</b>\n"
+                    f"{chr(10).join(['• ' + rec for rec in recommendations])}\n\n"
                     f"⏰ وقت الدورة: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}"
                 )
 
