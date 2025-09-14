@@ -1199,7 +1199,8 @@ class Crypto_Trading_Bot:
     
    
 
-    def calculate_signal_strength(self, data, signal_type='buy', symbol='Unknown'):
+    def calculate_signal_strength(self, data, signal_type='buy'):
+    symbol = getattr(self, 'symbol_for_logging', 'Unknown')  # الحصول على الرمز المخزن
         """تقييم قوة الإشارة مع الأوزان الديناميكية"""
         
         try:
@@ -1234,6 +1235,10 @@ class Crypto_Trading_Bot:
             total_votes = sum(votes.values())
             max_possible_votes = len(votes)
             vote_percentage = (total_votes / max_possible_votes) * 100
+
+            buy_signal = self.calculate_signal_strength(data, 'buy')
+            self.symbol_for_logging = symbol  # تخزين الرمز مؤقتاً
+            sell_signal = self.calculate_signal_strength(data, 'sell')
 
             # الجمع بين النظام القديم والجديد
             old_score = sum(indicator_contributions.values())
