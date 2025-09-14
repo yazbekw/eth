@@ -606,6 +606,7 @@ class Crypto_Trading_Bot:
         self.performance_analyzer = PerformanceAnalyzer()
         self.load_trade_history()
         self.last_buy_prices = {} 
+        self.detailed_logging = True  # تمكين التسجيل التفصيلي
         self.mango_db = MangoDBManager()
         
         # إعدادات العتبات الجديدة
@@ -1198,7 +1199,7 @@ class Crypto_Trading_Bot:
     
    
 
-    def calculate_signal_strength(self, data, signal_type='buy'):
+    def calculate_signal_strength(self, data, signal_type='buy', symbol='Unknown'):
         """تقييم قوة الإشارة مع الأوزان الديناميكية"""
         try:
             # تحليل ظروف السوق الحالية
@@ -1245,6 +1246,30 @@ class Crypto_Trading_Bot:
             final_score = max(min(combined_score, 100), -100)
         
             logger.debug(f"إشارة {signal_type} - النتيجة: {final_score:.1f}%, الأوزان: {dynamic_weights}")
+
+            # التسجيل التفصيلي للإشارات
+            if self.detailed_logging:
+                indicator_details = "\n".join([f"  {k}: {v:.1f}%" for k, v in indicator_contributions.items()])
+    
+                logger.info(f"📊 تفصيل إشارة {signal_type} لـ {symbol if 'symbol' in locals() else 'Unknown'}:\n"
+                            f"المساهمات الفردية:\n{indicator_details}\n"
+                            f"المجموع القديم: {old_score:.1f}%\n"
+                            f"نسبة التصويت: {vote_percentage:.1f}%\n"
+                            f"النتيجة النهائية: {final_score:.1f}%\n"
+                            f"{'='*50}")
+    
+                # أيضاً إرسال إشعار تيليجرام للتحليل المفصل
+                if self.notifier and abs(final_score) > 20:  # فقط للإشارات القوية
+                    detailed_msg = (f"🔍 <b>تفصيل إشارة {signal_type}</b>\n"
+                                   f"العملة: {symbol if 'symbol' in locals() else 'Unknown'}\n"
+                                   f"السعر: ${latest['close']:.2f}\n"
+                                   f"المساهمات:\n")
+                    for indicator, value in indicator_contributions.items():
+                        detailed_msg += f"• {indicator}: {value:.1f}%\n"
+                    detailed_msg += (f"المجموع: {old_score:.1f}%\n"
+                                    f"التصويت: {vote_percentage:.1f}%\n"
+                                    f"<b>النتيجة: {final_score:.1f}%</b>")
+                    self.notifier.send_message(detailed_msg)
         
             return final_score, dynamic_weights
         
@@ -2006,9 +2031,9 @@ class Crypto_Trading_Bot:
                         if data is not None and len(data) >= 50:
                             data = self.calculate_technical_indicators(data)
                             latest = data.iloc[-1]
-                            buy_signal, _ = self.calculate_signal_strength(data, 'buy')
-                            sell_signal, _ = self.calculate_signal_strength(data, 'sell')
-            
+                         
+                            buy_signal = self.calculate_signal_strength(data, 'buy', symbol)
+                            sell_signal = self.calculate_signal_strength(data, 'sell', symbol)
                             simplified_analysis.append(
                                 f"• {symbol}:\n"
                                 f"  📊 السعر: ${latest['close']:.2f}\n"
