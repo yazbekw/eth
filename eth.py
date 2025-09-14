@@ -606,7 +606,6 @@ class Crypto_Trading_Bot:
         self.performance_analyzer = PerformanceAnalyzer()
         self.load_trade_history()
         self.last_buy_prices = {} 
-        self.detailed_logging = True  # تمكين التسجيل التفصيلي
         self.mango_db = MangoDBManager()
         
         # إعدادات العتبات الجديدة
@@ -1200,11 +1199,8 @@ class Crypto_Trading_Bot:
    
 
     def calculate_signal_strength(self, data, signal_type='buy'):
-    symbol = getattr(self, 'symbol_for_logging', 'Unknown')  # الحصول على الرمز المخزن
         """تقييم قوة الإشارة مع الأوزان الديناميكية"""
-        
         try:
-            latest = data.iloc[-1]  # ← أضف هذا السطر هنا
             # تحليل ظروف السوق الحالية
             market_conditions = self.market_analyzer.analyze_market_condition(data)
         
@@ -1236,10 +1232,6 @@ class Crypto_Trading_Bot:
             max_possible_votes = len(votes)
             vote_percentage = (total_votes / max_possible_votes) * 100
 
-            buy_signal = self.calculate_signal_strength(data, 'buy')
-            self.symbol_for_logging = symbol  # تخزين الرمز مؤقتاً
-            sell_signal = self.calculate_signal_strength(data, 'sell')
-
             # الجمع بين النظام القديم والجديد
             old_score = sum(indicator_contributions.values())
             combined_score = (old_score * 0.6) + (vote_percentage * 0.4)
@@ -1253,30 +1245,6 @@ class Crypto_Trading_Bot:
             final_score = max(min(combined_score, 100), -100)
         
             logger.debug(f"إشارة {signal_type} - النتيجة: {final_score:.1f}%, الأوزان: {dynamic_weights}")
-
-            # التسجيل التفصيلي للإشارات
-            if self.detailed_logging:
-                indicator_details = "\n".join([f"  {k}: {v:.1f}%" for k, v in indicator_contributions.items()])
-    
-                logger.info(f"📊 تفصيل إشارة {signal_type} لـ {symbol if 'symbol' in locals() else 'Unknown'}:\n"
-                            f"المساهمات الفردية:\n{indicator_details}\n"
-                            f"المجموع القديم: {old_score:.1f}%\n"
-                            f"نسبة التصويت: {vote_percentage:.1f}%\n"
-                            f"النتيجة النهائية: {final_score:.1f}%\n"
-                            f"{'='*50}")
-    
-                # أيضاً إرسال إشعار تيليجرام للتحليل المفصل
-                if self.notifier and abs(final_score) > 20:  # فقط للإشارات القوية
-                    detailed_msg = (f"🔍 <b>تفصيل إشارة {signal_type}</b>\n"
-                                   f"العملة: {symbol if 'symbol' in locals() else 'Unknown'}\n"
-                                   f"السعر: ${latest['close']:.2f}\n"
-                                   f"المساهمات:\n")
-                    for indicator, value in indicator_contributions.items():
-                        detailed_msg += f"• {indicator}: {value:.1f}%\n"
-                    detailed_msg += (f"المجموع: {old_score:.1f}%\n"
-                                    f"التصويت: {vote_percentage:.1f}%\n"
-                                    f"<b>النتيجة: {final_score:.1f}%</b>")
-                    self.notifier.send_message(detailed_msg)
         
             return final_score, dynamic_weights
         
@@ -2023,46 +1991,6 @@ class Crypto_Trading_Bot:
     
             # إنشاء التوصيات
             recommendations = self.generate_recommendations(performance)
-
-            # إنشاء تحليل مفصل للإشارات لإظهاره في التلغرام
-            detailed_analysis_telegram = ""
-            for symbol in self.symbols:
-                try:
-                    data = self.get_historical_data(symbol)
-                    if data is None:
-                        continue
-            
-                    data = self.calculate_technical_indicators(data)
-                    latest = data.iloc[-1]
-        
-                    buy_signal = self.calculate_signal_strength(data, 'buy', symbol)
-                    sell_signal = self.calculate_signal_strength(data, 'sell', symbol)
-        
-                    # الحصول على مساهمات المؤشرات من الذاكرة
-                    buy_contributions = self.last_buy_contributions
-                    sell_contributions = self.last_sell_contributions
-        
-                    detailed_analysis_telegram += (
-                        f"🔍 <b>{symbol}</b>\n"
-                        f"💰 السعر: ${latest['close']:.2f}\n"
-                        f"📊 RSI: {latest['rsi']:.1f}\n"
-                        f"🔵 MACD: {latest['macd']:.3f}\n"
-                        f"📍 البولينجر: {((latest['close'] - latest['bb_lower']) / (latest['bb_upper'] - latest['bb_lower']) * 100):.1f}%\n"
-                        f"🟢 شراء: {buy_signal:.1f}%\n"
-                        f"🔴 بيع: {sell_signal:.1f}%\n"
-                    )
-        
-                    # إضافة مساهمات المؤشرات للشراء
-                    if buy_contributions:
-                        detailed_analysis_telegram += "📈 مساهمات الشراء:\n"
-                        for indicator, value in buy_contributions.items():
-                            detailed_analysis_telegram += f"   • {indicator}: {value:.1f}%\n"
-        
-                    detailed_analysis_telegram += "━━━━━━━━━━━━━━━━━━━━\n\n"
-        
-                except Exception as e:
-                    logger.error(f"خطأ في إنشاء التحليل المفصل لـ {symbol}: {e}")
-                    continue
     
             # إرسال رسالة واحدة بنتائج جميع العملات
             if self.notifier:
@@ -2078,9 +2006,9 @@ class Crypto_Trading_Bot:
                         if data is not None and len(data) >= 50:
                             data = self.calculate_technical_indicators(data)
                             latest = data.iloc[-1]
-                         
-                            buy_signal = self.calculate_signal_strength(data, 'buy', symbol)
-                            sell_signal = self.calculate_signal_strength(data, 'sell', symbol)
+                            buy_signal, _ = self.calculate_signal_strength(data, 'buy')
+                            sell_signal, _ = self.calculate_signal_strength(data, 'sell')
+            
                             simplified_analysis.append(
                                 f"• {symbol}:\n"
                                 f"  📊 السعر: ${latest['close']:.2f}\n"
@@ -2094,22 +2022,13 @@ class Crypto_Trading_Bot:
 
                 summary_msg = (
                     f"📊 <b>ملخص دورة التداول الشامل</b>\n\n"
-                    f"<b>📈 التحليل الفني المفصل:</b>\n{detailed_analysis_telegram}\n"
-                    f"<b>🎯 إشارات التداول:</b>\n{results_text}\n\n"
+                    f"<b>📈 التحليل الفني التفصيلي:</b>\n{simplified_text}\n\n"
                     f"<b>⚡ الإجراءات المتخذة:</b>\n{actions_text}\n\n"
                     f"<b>💰 الأداء المالي:</b>\n"
-                    f"• الرصيد الحالي: ${current_balance:.2f}\n"
-                    f"• الربح/الخسارة اليومي: ${performance['daily_pnl']:.2f}\n"
-                    f"• نسبة العائد: {performance['daily_return']:.2f}%\n"
-                    f"• عدد الصفقات: {performance['total_trades']}\n"
-                    f"• نسبة النجاح: {performance['win_rate']:.1f}%\n\n"
+                    f"• الرصيد الحالي: ${current_balance:.2f}\n\n"
+                    f"<b>💼 الرصيد التفصيلي:</b>\n{balance_details}\n\n"
                     f"<b>📊 إحصائيات التداول:</b>\n"
-                    f"• الأوامر النشطة: {self.get_total_orders_count()}\n"
-                    f"• الصفقات الرابحة: {performance['winning_trades']}\n"
-                    f"• الصفقات الخاسرة: {performance['losing_trades']}\n"
-                    f"• عامل الربحية: {performance['profit_factor']:.2f}\n\n"
-                    f"<b>⚠️ التنبيهات والتوصيات:</b>\n"
-                    f"{chr(10).join(['• ' + rec for rec in recommendations])}\n\n"
+                    f"• الأوامر النشطة: {self.get_total_orders_count()}\n\n"
                     f"⏰ وقت الدورة: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}"
                 )
 
