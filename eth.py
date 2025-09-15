@@ -321,27 +321,27 @@ class MarketConditionAnalyzer:
             'LOW_VOLATILITY': 0
         }
         
-        # مصفوفة الأوزان الأساسية
+        # استبدال مصفوفة الأوزان في __init__ بهذه:
         self.WEIGHT_MATRIX = {
             'TRENDING_BULL': {
-                'market_trend': 25, 'moving_averages': 20, 'macd': 15,
-                'rsi': 10, 'bollinger_bands': 10, 'volume': 10, 'adx': 10
+                'market_trend': 20, 'moving_averages': 18, 'macd': 15,
+                'rsi': 12, 'bollinger_bands': 12, 'volume': 10, 'adx': 13
             },
             'TRENDING_BEAR': {
-                'market_trend': 25, 'moving_averages': 20, 'macd': 15,
-                'rsi': 10, 'bollinger_bands': 10, 'volume': 10, 'adx': 10
+                'market_trend': 20, 'moving_averages': 18, 'macd': 15,
+                'rsi': 12, 'bollinger_bands': 12, 'volume': 10, 'adx': 13
             },
             'RANGING': {
-                'market_trend': 10, 'moving_averages': 10, 'macd': 10,
-                'rsi': 25, 'bollinger_bands': 25, 'volume': 10, 'adx': 10
+                'market_trend': 8, 'moving_averages': 8, 'macd': 12,
+                'rsi': 20, 'bollinger_bands': 22, 'volume': 15, 'adx': 15
             },
             'VOLATILE': {
-                'market_trend': 15, 'moving_averages': 15, 'macd': 10,
-                'rsi': 15, 'bollinger_bands': 20, 'volume': 15, 'adx': 10
+               'market_trend': 12, 'moving_averages': 12, 'macd': 12,
+               'rsi': 14, 'bollinger_bands': 18, 'volume': 18, 'adx': 14
             },
             'LOW_VOLATILITY': {
-                'market_trend': 20, 'moving_averages': 20, 'macd': 15,
-                'rsi': 15, 'bollinger_bands': 10, 'volume': 10, 'adx': 10
+                'market_trend': 16, 'moving_averages': 16, 'macd': 16,
+                'rsi': 16, 'bollinger_bands': 12, 'volume': 12, 'adx': 12
             }
         }
 
@@ -1407,55 +1407,34 @@ class Crypto_Trading_Bot:
                 return 0.0  # 0%
 				
     def calculate_volume_score(self, data, signal_type):
-        """حساب درجة الحجم مع معالجة القيم غير المنطقية"""
+        """نسخة محسنة من حساب درجة الحجم"""
         try:
             latest = data.iloc[-1]
-            prev = data.iloc[-2]
         
-            # التأكد من وجود قيم صحيحة
-            if latest['volume'] <= 0 or latest['volume_ma'] <= 0:
-                return 0.0  # قيمة افتراضية في حالة البيانات غير الصحيحة
-        
-            # حساب نسبة الحجم إلى المتوسط
+            # معالجة خاصة للقيم المنخفضة
+            if latest['volume_ma'] < 1000:  # حجم تداول منخفض جداً
+                return 5.0  # قيمة أساسية بدلاً من 0
+            
             volume_ratio = latest['volume'] / latest['volume_ma']
         
-            # معالجة القيم غير المنطقية
-            if np.isinf(volume_ratio) or np.isnan(volume_ratio):
-                volume_ratio = 1.0  # قيمة افتراضية
-            elif volume_ratio < 0.1:
-                volume_ratio = 0.1  # حد أدنى منطقي
-            elif volume_ratio > 10:
-                volume_ratio = 10  # حد أقصى منطقي
-        
-            # تسجيل معلومات التصحيح
-            logger.debug(f"حساب حجم {signal_type}: النسبة {volume_ratio:.3f}, الحجم {latest['volume']:.0f}, المتوسط {latest['volume_ma']:.0f}")
+            # قيود أكثر واقعية
+            volume_ratio = max(0.3, min(3.0, volume_ratio))
         
             if signal_type == 'buy':
-                if volume_ratio > 2.0:  # حجم كبير جداً
-                    return 20.0  # 100%
-                elif volume_ratio > 1.5:  # حجم كبير
-                    return 15.0  # 75%
-                elif volume_ratio > 1.2:  # حجم فوق المتوسط
-                    return 10.0  # 50%
-                elif volume_ratio > 1.0:  # حجم طبيعي
-                    return 5.0  # 25%
-                else:  # حجم ضعيف
-                    return 0.0  # 0%
+                if volume_ratio > 2.0: return 18.0
+                elif volume_ratio > 1.5: return 14.0
+                elif volume_ratio > 1.2: return 10.0
+                elif volume_ratio > 0.8: return 6.0
+                else: return 3.0
             else:  # sell
-                if volume_ratio > 2.0:  # حجم كبير جداً (للبيع أيضاً)
-                    return 20.0  # 100%
-                elif volume_ratio > 1.5:  # حجم كبير
-                    return 15.0  # 75%
-                elif volume_ratio > 1.2:  # حجم فوق المتوسط
-                    return 10.0  # 50%
-                elif volume_ratio > 1.0:  # حجم طبيعي
-                    return 5.0  # 25%
-                else:  # حجم ضعيف
-                    return 0.0  # 0%
-                
+                if volume_ratio > 2.0: return 18.0
+                elif volume_ratio > 1.5: return 14.0
+                elif volume_ratio > 1.2: return 10.0
+                elif volume_ratio > 0.8: return 6.0
+                else: return 3.0
+            
         except Exception as e:
-            logger.error(f"خطأ في حساب درجة الحجم: {e}")
-            return 0.0  # قيمة افتراضية في حالة الخطأ
+            return 5.0  # قيمة افتراضية معقولة
 
     def calculate_market_trend_score(self, data, signal_type):
         """حساب درجة اتجاه السوق"""
