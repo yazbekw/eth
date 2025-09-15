@@ -609,8 +609,8 @@ class Crypto_Trading_Bot:
         self.mango_db = MangoDBManager()
         
         # إعدادات العتبات الجديدة
-        self.BASELINE_BUY_THRESHOLD = 30
-        self.STRICT_BUY_THRESHOLD = 35
+        self.BASELINE_BUY_THRESHOLD = 27
+        self.STRICT_BUY_THRESHOLD = 33
         self.SELL_THRESHOLD = 30
 
         self.active_trailing_stops = {}
@@ -1987,7 +1987,7 @@ def main():
         
         # تهيئة وتشغيل بوت التداول
         bot = Crypto_Trading_Bot()
-        bot.start_trading(cycle_interval=1200)  # دورة كل 5 دقائق
+        bot.start_trading(cycle_interval=600)  # دورة كل 5 دقائق
         
     except Exception as e:
         logger.error(f"❌ خطأ في الدالة الرئيسية: {e}")
