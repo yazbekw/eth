@@ -325,15 +325,15 @@ class MarketConditionAnalyzer:
         self.WEIGHT_MATRIX = {
             'TRENDING_BULL': {
                 'market_trend': 20, 'moving_averages': 18, 'macd': 15,
-                'rsi': 12, 'bollinger_bands': 12, 'volume': 10, 'adx': 13
+                'rsi': 14, 'bollinger_bands': 12, 'volume': 10, 'adx': 13
             },
             'TRENDING_BEAR': {
                 'market_trend': 20, 'moving_averages': 18, 'macd': 15,
-                'rsi': 12, 'bollinger_bands': 12, 'volume': 10, 'adx': 13
+                'rsi': 14, 'bollinger_bands': 12, 'volume': 10, 'adx': 13
             },
             'RANGING': {
                 'market_trend': 8, 'moving_averages': 8, 'macd': 12,
-                'rsi': 20, 'bollinger_bands': 22, 'volume': 15, 'adx': 15
+                'rsi': 22, 'bollinger_bands': 22, 'volume': 15, 'adx': 15
             },
             'VOLATILE': {
                'market_trend': 12, 'moving_averages': 12, 'macd': 12,
@@ -1412,8 +1412,8 @@ class Crypto_Trading_Bot:
             latest = data.iloc[-1]
         
             # معالجة خاصة للقيم المنخفضة
-            if latest['volume_ma'] < 1000:  # حجم تداول منخفض جداً
-                return 5.0  # قيمة أساسية بدلاً من 0
+            if latest['volume_ma'] < 500:  # حجم تداول منخفض جداً
+                return 8.0  # قيمة أساسية بدلاً من 0
             
             volume_ratio = latest['volume'] / latest['volume_ma']
         
