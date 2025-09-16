@@ -609,7 +609,7 @@ class Crypto_Trading_Bot:
         self.mango_db = MangoDBManager()
         
         # إعدادات العتبات الجديدة
-        self.BASELINE_BUY_THRESHOLD = 30
+        self.BASELINE_BUY_THRESHOLD = 35
         self.STRICT_BUY_THRESHOLD = 35
         self.SELL_THRESHOLD = 30
 
@@ -879,10 +879,10 @@ class Crypto_Trading_Bot:
         support = data['bb_lower'].iloc[-1]
     
         # إذا near resistance - avoid buying
-        if current_price > resistance * 0.997:
+        if current_price > resistance * 0.99:
             return "near_resistance"
         # إذا near support - avoid selling
-        elif current_price < support * 1.03:
+        elif current_price < support * 1.1:
             return "near_support"
         return "neutral"
 
