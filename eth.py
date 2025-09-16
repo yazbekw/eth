@@ -609,8 +609,8 @@ class Crypto_Trading_Bot:
         self.mango_db = MangoDBManager()
         
         # إعدادات العتبات الجديدة
-        self.BASELINE_BUY_THRESHOLD = 27
-        self.STRICT_BUY_THRESHOLD = 33
+        self.BASELINE_BUY_THRESHOLD = 30
+        self.STRICT_BUY_THRESHOLD = 35
         self.SELL_THRESHOLD = 30
 
         self.active_trailing_stops = {}
