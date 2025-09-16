@@ -610,8 +610,8 @@ class Crypto_Trading_Bot:
         
         # إعدادات العتبات الجديدة
         self.BASELINE_BUY_THRESHOLD = 35
-        self.STRICT_BUY_THRESHOLD = 35
-        self.SELL_THRESHOLD = 30
+        self.STRICT_BUY_THRESHOLD = 40
+        self.SELL_THRESHOLD = 35
 
         self.active_trailing_stops = {}
         self.STOP_LOSS = 0.02
