@@ -1,4 +1,3 @@
-
 import os
 import pandas as pd
 import numpy as np
@@ -11,7 +10,7 @@ import logging
 import warnings
 warnings.filterwarnings('ignore')
 from dotenv import load_dotenv
-from flask import Flask
+from flask import Flask, request, jsonify
 import threading
 import json
 from pymongo import MongoClient
@@ -155,10 +154,15 @@ class MangoDBManager:
             logger.error(f"❌ خطأ في الاتصال بـ MangoDB: {e}")
             return False
     
+    def ensure_connected(self):
+        if not self.db:
+            return self.connect()
+        return True
+    
     def insert_trade(self, trade_data):
         """إدراج صفقة جديدة"""
         try:
-            if not self.db:
+            if not self.ensure_connected():
                 return False
                 
             collection = self.db['trades']
@@ -173,7 +177,7 @@ class MangoDBManager:
     def insert_performance_data(self, performance_data):
         """إدراج بيانات أداء"""
         try:
-            if not self.db:
+            if not self.ensure_connected():
                 return False
                 
             collection = self.db['performance']
@@ -187,7 +191,7 @@ class MangoDBManager:
     def get_recent_trades(self, symbol=None, limit=50):
         """جلب أحدث الصفقات"""
         try:
-            if not self.db:
+            if not self.ensure_connected():
                 return []
                 
             collection = self.db['trades']
@@ -209,7 +213,7 @@ class MangoDBManager:
     def get_daily_performance(self, date=None):
         """جلب أداء يومي"""
         try:
-            if not self.db:
+            if not self.ensure_connected():
                 return {}
                 
             collection = self.db['performance']
@@ -228,7 +232,7 @@ class MangoDBManager:
     def cleanup_old_data(self, days_to_keep=30):
         """تنظيف البيانات الأقدم من عدد محدد من الأيام"""
         try:
-            if not self.db:
+            if not self.ensure_connected():
                 return False
                 
             cutoff_date = datetime.now() - timedelta(days=days_to_keep)
@@ -453,21 +457,28 @@ class MarketConditionAnalyzer:
             return self.WEIGHT_MATRIX['RANGING']
 
 class LearningSystem:
-    def __init__(self, db_url=None):
+    def __init__(self, mango_db, market_analyzer):
         self.performance_history = []
         self.weight_adjustment_factor = 0.1
-        self.db_url = db_url
+        self.mango_db = mango_db
+        self.market_analyzer = market_analyzer
         self.load_performance_data()
         
     def load_performance_data(self):
         """تحميل بيانات الأداء من قاعدة البيانات"""
         try:
-            if self.db_url:
-                # هنا سيتم تحميل البيانات من MongoDB أو SQLite
-                pass
-            elif os.path.exists('performance_data.json'):
-                with open('performance_data.json', 'r', encoding='utf-8') as f:
-                    self.performance_history = json.load(f)
+            if not self.mango_db.ensure_connected():
+                logger.warning("فشل الاتصال بـ DB، استخدام بيانات محلية")
+                if os.path.exists('performance_data.json'):
+                    with open('performance_data.json', 'r', encoding='utf-8') as f:
+                        self.performance_history = json.load(f)
+                return
+            
+            collection = self.mango_db.db['performance_history']
+            self.performance_history = list(collection.find().sort('timestamp', 1))
+            for item in self.performance_history:
+                item['_id'] = str(item['_id'])
+            
         except Exception as e:
             logger.error(f"خطأ في تحميل بيانات الأداء: {e}")
             self.performance_history = []
@@ -475,12 +486,15 @@ class LearningSystem:
     def save_performance_data(self):
         """حفظ بيانات الأداء"""
         try:
-            if self.db_url:
-                # حفظ في قاعدة البيانات
-                pass
-            else:
+            if not self.mango_db.ensure_connected():
                 with open('performance_data.json', 'w', encoding='utf-8') as f:
                     json.dump(self.performance_history, f, ensure_ascii=False, indent=2)
+                return
+            
+            collection = self.mango_db.db['performance_history']
+            for data in self.performance_history:
+                collection.replace_one({'timestamp': data['timestamp']}, data, upsert=True)
+            
         except Exception as e:
             logger.error(f"خطأ في حفظ بيانات الأداء: {e}")
 
@@ -540,18 +554,16 @@ class LearningSystem:
     def update_weight_matrix(self, indicator_performance):
         """تحديث مصفوفة الأوزان بناء على الأداء"""
         try:
-            market_analyzer = MarketConditionAnalyzer()
-            
             for indicator, success_rate in indicator_performance.items():
                 adjustment = (success_rate - 50) * self.weight_adjustment_factor
                 
                 # تطبيق التعديل على جميع ظروف السوق
-                for condition in market_analyzer.WEIGHT_MATRIX.keys():
-                    if indicator in market_analyzer.WEIGHT_MATRIX[condition]:
-                        new_weight = market_analyzer.WEIGHT_MATRIX[condition][indicator] + adjustment
+                for condition in self.market_analyzer.WEIGHT_MATRIX.keys():
+                    if indicator in self.market_analyzer.WEIGHT_MATRIX[condition]:
+                        new_weight = self.market_analyzer.WEIGHT_MATRIX[condition][indicator] + adjustment
                         # التأكد من أن الوزن بين 5 و30
                         new_weight = max(5, min(30, new_weight))
-                        market_analyzer.WEIGHT_MATRIX[condition][indicator] = new_weight
+                        self.market_analyzer.WEIGHT_MATRIX[condition][indicator] = new_weight
             
             logger.info(f"تم تعديل الأوزان: {indicator_performance}")
             
@@ -596,6 +608,14 @@ class LearningSystem:
                 if datetime.fromisoformat(t['timestamp']) > one_month_ago
             ]
             self.save_performance_data()
+            
+            # تنظيف من DB إذا متصل
+            if self.mango_db.db:
+                collection = self.mango_db.db['performance_history']
+                collection.delete_many({
+                    'timestamp': {'$lt': one_month_ago.isoformat()}
+                })
+                
         except Exception as e:
             logger.error(f"خطأ في تنظيف البيانات القديمة: {e}")
 
@@ -657,7 +677,7 @@ class Crypto_Trading_Bot:
         
             # إضافة الأنظمة الجديدة
             self.market_analyzer = MarketConditionAnalyzer() # تمرير reference للبوت
-            self.learning_system = LearningSystem()
+            self.learning_system = LearningSystem(self.mango_db, self.market_analyzer)
             
             detailed_balance = self.get_detailed_balance()
             balance_details = "\n".join(detailed_balance)
@@ -798,7 +818,8 @@ class Crypto_Trading_Bot:
         self.save_trade_history()
 
    	    # حفظ في MangoDB
-        self.mango_db.insert_trade(trade_record)
+        if not self.mango_db.insert_trade(trade_record):
+            logger.warning("فشل حفظ الصفقة في DB، لكن حفظ محلياً")
 
     def generate_12h_trading_report(self):
         """إنشاء تقرير التداول لآخر 12 ساعة"""
@@ -915,6 +936,18 @@ class Crypto_Trading_Bot:
                         'win_rate': symbol_win_rate,
                         'total_profit': symbol_total_profit
                     }
+
+            signal_analysis = {
+                "strong_signals": len(strong_signals),
+                "strong_win_rate": round(strong_win_rate, 1),
+                "medium_signals": len(medium_signals),
+                "medium_win_rate": round(medium_win_rate, 1),
+                "weak_signals": len(weak_signals),
+                "weak_win_rate": round(weak_win_rate, 1)
+            }
+            
+            recommendations = self.generate_recommendations(performance)
+            
             report = {
                 "date": datetime.now().strftime("%Y-%m-%d"),
                 "performance": performance,
@@ -925,21 +958,6 @@ class Crypto_Trading_Bot:
         
             # حفظ في MangoDB
             self.mango_db.insert_performance_data(report)
-            
-            report = {
-                "date": datetime.now().strftime("%Y-%m-%d"),
-                "performance": performance,
-                "signal_analysis": {
-                    "strong_signals": len(strong_signals),
-                    "strong_win_rate": round(strong_win_rate, 1),
-                    "medium_signals": len(medium_signals),
-                    "medium_win_rate": round(medium_win_rate, 1),
-                    "weak_signals": len(weak_signals),
-                    "weak_win_rate": round(weak_win_rate, 1)
-                },
-                "symbol_performance": symbol_performance,
-                "recommendations": self.generate_recommendations(performance)
-            }
             
             return report
         except Exception as e:
@@ -1466,7 +1484,7 @@ class Crypto_Trading_Bot:
             else:  # اتجاه صعودي
                 return 0.0  # 0%
 
-    def get_historical_data(self, symbol, interval='15m', limit=100):
+    def get_historical_data(self, symbol, interval='15m', limit=200):
         """جلب البيانات التاريخية"""
         try:
             klines = self.client.get_klines(symbol=symbol, interval=interval, limit=limit)
@@ -1660,9 +1678,7 @@ class Crypto_Trading_Bot:
                     logger.error(f"خطأ في تحليل أداء الشراء: {e}")
     
             # تشغيل التحليل في خلفية منفصلة
-            import threading
-            perf_thread = threading.Thread(target=analyze_performance_later)
-            perf_thread.daemon = True
+            perf_thread = threading.Thread(target=analyze_performance_later, daemon=True)
             perf_thread.start()
     
             return True, "تم تنفيذ أمر الشراء بنجاح"
@@ -1826,7 +1842,7 @@ class Crypto_Trading_Bot:
             analysis_results = []
             trade_actions = []
             detailed_analysis = []
-            indicator_contributions_all = {}  # تخزين مساهمات المؤشرات لكل عملة
+            detailed_contributions_all = {}  # تخزين مساهمات المؤشرات لكل عملة
 
             for symbol in self.symbols:
                 try:
@@ -1847,7 +1863,7 @@ class Crypto_Trading_Bot:
                     sell_signal, sell_weights, sell_contributions = self.calculate_signal_strength(data, 'sell')
 
                     # حفظ مساهمات المؤشرات
-                    indicator_contributions_all[symbol] = {
+                    detailed_contributions_all[symbol] = {
                         'buy': buy_contributions,
                         'sell': sell_contributions,
                         'buy_weights': buy_weights,
@@ -1966,7 +1982,7 @@ def main():
         
         # تهيئة وتشغيل بوت التداول
         bot = Crypto_Trading_Bot()
-        bot.start_trading(cycle_interval=1500)  # دورة كل 5 دقائق
+        bot.start_trading(cycle_interval=900)  # دورة كل 5 دقائق
         
     except Exception as e:
         logger.error(f"❌ خطأ في الدالة الرئيسية: {e}")
