@@ -22,21 +22,25 @@ EXECUTE_TRADES = os.getenv("EXECUTE_TRADES", "false").lower() == "true"
 
 # إعدادات التداول
 SCAN_INTERVAL = 300  # 5 دقائق بين كل فحص
-CONFIDENCE_THRESHOLD = 61  # عتبة الثقة
+CONFIDENCE_THRESHOLD = 60  # عتبة الثقة
 
 # العملات المدعومة
 SUPPORTED_COINS = {
-    'btc': {'name': 'Bitcoin', 'binance_symbol': 'BTCUSDT', 'symbol': 'BTC'},
+    #'btc': {'name': 'Bitcoin', 'binance_symbol': 'BTCUSDT', 'symbol': 'BTC'},
     'eth': {'name': 'Ethereum', 'binance_symbol': 'ETHUSDT', 'symbol': 'ETH'},
     'bnb': {'name': 'Binance Coin', 'binance_symbol': 'BNBUSDT', 'symbol': 'BNB'},
-    'sol': {'name': 'Solana', 'binance_symbol': 'SOLUSDT', 'symbol': 'SOL'},
-    'xrp': {'name': 'Ripple', 'binance_symbol': 'XRPUSDT', 'symbol': 'XRP'},
+    #'sol': {'name': 'Solana', 'binance_symbol': 'SOLUSDT', 'symbol': 'SOL'},
+    #'xrp': {'name': 'Ripple', 'binance_symbol': 'XRPUSDT', 'symbol': 'XRP'},
 }
 
 TIMEFRAMES = ['1h', '15m', '5m']  # الأطر الزمنية للمسح
 
 # إعداد التسجيل
-logging.basicConfig(level=logging.INFO)
+logging.basicConfig(
+    level=logging.INFO,
+    format='%(asctime)s - %(levelname)s - %(message)s',
+    datefmt='%Y-%m-%d %H:%M:%S'
+)
 logger = logging.getLogger("simple_signal_generator")
 
 app = FastAPI(title="Simple Crypto Signal Generator")
@@ -46,7 +50,8 @@ system_stats = {
     "start_time": time.time(),
     "total_scans": 0,
     "signals_generated": 0,
-    "signals_sent": 0
+    "signals_sent": 0,
+    "last_heartbeat": None
 }
 
 class SimpleSignalGenerator:
@@ -243,24 +248,24 @@ class BinanceDataFetcher:
                 return {"signal": "none", "confidence": 0, "reason": "فشل جلب البيانات"}
                 
         except Exception as e:
-            logger.error(f"خطأ في جلب بيانات {coin_symbol}: {e}")
+            logger.error(f"❌ خطأ في جلب بيانات {coin_symbol}: {e}")
             return {"signal": "none", "confidence": 0, "reason": f"خطأ: {str(e)}"}
 
 class TelegramNotifier:
-    """إشعارات التليجرام"""
+    """إشعارات التليجرام المحدثة"""
     
     def __init__(self, token: str, chat_id: str):
         self.token = token
         self.chat_id = chat_id
         self.base_url = f"https://api.telegram.org/bot{token}"
     
-    async def send_signal_alert(self, coin: str, timeframe: str, signal_data: Dict[str, Any]) -> bool:
-        """إرسال إشعار بالإشارة"""
+    async def send_simple_signal_alert(self, coin: str, timeframe: str, signal_data: Dict[str, Any]) -> bool:
+        """إرسال إشعار إشارة مبسط"""
         if signal_data["signal"] == "none":
             return False
         
         try:
-            message = self._build_signal_message(coin, timeframe, signal_data)
+            message = self._build_simple_signal_message(coin, timeframe, signal_data)
             
             payload = {
                 'chat_id': self.chat_id,
@@ -273,62 +278,95 @@ class TelegramNotifier:
                                            json=payload, timeout=10.0)
             
             if response.status_code == 200:
-                logger.info(f"تم إرسال إشعار إشارة لـ {coin} ({timeframe})")
+                logger.info(f"📨 تم إرسال إشعار إشارة لـ {coin} ({timeframe})")
                 return True
             else:
-                logger.error(f"فشل إرسال الإشعار: {response.status_code}")
+                logger.error(f"❌ فشل إرسال الإشعار: {response.status_code}")
                 return False
                 
         except Exception as e:
-            logger.error(f"خطأ في إرسال الإشعار: {e}")
+            logger.error(f"❌ خطأ في إرسال الإشعار: {e}")
             return False
     
-    def _build_signal_message(self, coin: str, timeframe: str, signal_data: Dict[str, Any]) -> str:
-        """بناء رسالة الإشارة"""
+    def _build_simple_signal_message(self, coin: str, timeframe: str, signal_data: Dict[str, Any]) -> str:
+        """بناء رسالة إشارة مبسطة"""
         signal_type = signal_data["signal"]
         confidence = signal_data["confidence"]
         price = signal_data["price"]
         indicators = signal_data["indicators"]
-        reasons = signal_data["reasons"]
         
         if signal_type == "BUY":
             emoji = "🟢"
             action = "شراء"
-            color = "#00C851"
         else:  # SELL
-            emoji = "🔴"
+            emoji = "🔴" 
             action = "بيع"
-            color = "#FF4444"
         
-        message = f"{emoji} **إشارة {action} - {coin.upper()}** {emoji}\n"
-        message += "═" * 40 + "\n\n"
-        
-        message += f"💰 **السعر الحالي:** `${price:,.2f}`\n"
-        message += f"⏰ **الإطار الزمني:** `{timeframe}`\n"
-        message += f"🎯 **قوة الإشارة:** `{confidence}/100`\n"
-        message += f"🕒 **الوقت:** `{datetime.now().strftime('%H:%M %d/%m/%Y')}`\n\n"
-        
-        message += "📊 **تفاصيل المؤشرات:**\n"
-        message += f"• 📈 **RSI:** `{indicators['rsi']}`\n"
-        message += f"• 🔄 **MACD Hist:** `{indicators['macd']['histogram']:.4f}`\n"
-        message += f"• 📶 **اتجاه المتوسطات:** `{indicators['trend']['order']}`\n"
-        message += f"• 💪 **قوة الاتجاه:** `{indicators['trend']['strength']}/10`\n\n"
-        
-        message += "📈 **توزيع النقاط:**\n"
-        scores = indicators['scores']
-        message += f"• المتوسطات: `{scores['moving_averages']}/40`\n"
-        message += f"• RSI: `{scores['rsi']}/30`\n"
-        message += f"• MACD: `{scores['macd']}/30`\n\n"
-        
-        message += "🔍 **أسباب الإشارة:**\n"
-        for reason in reasons:
-            message += f"• {reason}\n"
-        
-        message += "\n"
-        message += "⚡ **مولد الإشارات المبسط**\n"
-        message += "🎯 **استراتيجية:** المتوسطات + RSI + MACD"
+        message = f"{emoji} **إشارة {action} - {coin.upper()}**\n"
+        message += "─" * 25 + "\n"
+        message += f"💰 **السعر:** `${price:,.2f}`\n"
+        message += f"⏰ **الإطار:** `{timeframe}`\n"
+        message += f"🎯 **الثقة:** `{confidence}%`\n"
+        message += f"📊 **RSI:** `{indicators['rsi']}`\n"
+        message += f"🔄 **MACD:** `{indicators['macd']['histogram']:.4f}`\n"
+        message += f"📶 **الاتجاه:** `{indicators['trend']['order']}`\n"
+        message += f"🕒 **الوقت:** `{datetime.now().strftime('%H:%M')}`\n"
+        message += "─" * 25 + "\n"
+        message += "⚡ **مولد الإشارات المبسط**"
         
         return message
+    
+    async def send_heartbeat(self, executor_connected: bool, signals_count: int = 0) -> bool:
+        """إرسال نبضة اتصال كل ساعتين"""
+        try:
+            current_time = datetime.now().strftime('%H:%M %d/%m/%Y')
+            uptime_seconds = time.time() - system_stats["start_time"]
+            uptime_str = self._format_uptime(uptime_seconds)
+            
+            status_emoji = "✅" if executor_connected else "❌"
+            status_text = "متصل" if executor_connected else "غير متصل"
+            
+            message = f"💓 **نبضة النظام**\n"
+            message += "─" * 25 + "\n"
+            message += f"⏰ **الوقت:** `{current_time}`\n"
+            message += f"⏱️ **مدة التشغيل:** `{uptime_str}`\n"
+            message += f"🔗 **الاتصال بالمنفذ:** {status_emoji} `{status_text}`\n"
+            message += f"📊 **الإشارات المرسلة:** `{signals_count}`\n"
+            message += f"🔍 **المسحات الكلية:** `{system_stats['total_scans']}`\n"
+            message += "─" * 25 + "\n"
+            message += "✅ **جميع الأنظمة تعمل بشكل طبيعي**"
+            
+            payload = {
+                'chat_id': self.chat_id,
+                'text': message,
+                'parse_mode': 'Markdown'
+            }
+            
+            async with httpx.AsyncClient() as client:
+                response = await client.post(f"{self.base_url}/sendMessage", 
+                                           json=payload, timeout=10.0)
+            
+            if response.status_code == 200:
+                logger.info("💓 تم إرسال نبضة النظام بنجاح")
+                system_stats["last_heartbeat"] = current_time
+                return True
+            else:
+                logger.error(f"❌ فشل إرسال النبضة: {response.status_code}")
+                return False
+                
+        except Exception as e:
+            logger.error(f"❌ خطأ في إرسال النبضة: {e}")
+            return False
+    
+    def _format_uptime(self, seconds: float) -> str:
+        """تنسيق مدة التشغيل"""
+        hours = int(seconds // 3600)
+        minutes = int((seconds % 3600) // 60)
+        
+        if hours > 0:
+            return f"{hours} ساعة, {minutes} دقيقة"
+        else:
+            return f"{minutes} دقيقة"
 
 class ExecutorBotClient:
     """عميل للتواصل مع بوت التنفيذ"""
@@ -364,15 +402,24 @@ class ExecutorBotClient:
             )
             
             if response.status_code == 200:
-                logger.info(f"تم إرسال إشارة للتنفيذ: {signal_data['coin']} - {signal_data['signal']}")
+                logger.info(f"✅ تم إرسال إشارة للتنفيذ: {signal_data['coin']} - {signal_data['action']}")
                 system_stats["signals_sent"] += 1
                 return True
             else:
-                logger.error(f"فشل إرسال الإشارة: {response.status_code}")
+                logger.error(f"❌ فشل إرسال الإشارة: {response.status_code}")
                 return False
                 
         except Exception as e:
-            logger.error(f"خطأ في التواصل مع البوت المنفذ: {e}")
+            logger.error(f"❌ خطأ في التواصل مع البوت المنفذ: {e}")
+            return False
+
+    async def health_check(self) -> bool:
+        """فحص حالة البوت المنفذ"""
+        try:
+            response = await self.client.get(f"{self.base_url}/health", timeout=10.0)
+            return response.status_code == 200
+        except Exception as e:
+            logger.error(f"❌ فحص صحة البوت المنفذ فشل: {e}")
             return False
 
 # =============================================================================
@@ -389,7 +436,7 @@ executor_client = ExecutorBotClient(EXECUTOR_BOT_URL, EXECUTOR_BOT_API_KEY)
 
 async def market_scanner_task():
     """المهمة الرئيسية للمسح الضوئي"""
-    logger.info("بدء مهمة مسح السوق كل 5 دقائق")
+    logger.info("🚀 بدء مهمة مسح السوق كل 5 دقائق")
     
     while True:
         try:
@@ -405,10 +452,10 @@ async def market_scanner_task():
                         if (signal_data["signal"] != "none" and 
                             signal_data["confidence"] >= CONFIDENCE_THRESHOLD):
                             
-                            logger.info(f"إشارة {signal_data['signal']} لـ {coin_key} ({timeframe}) - ثقة: {signal_data['confidence']}")
+                            logger.info(f"🎯 إشارة {signal_data['signal']} لـ {coin_key} ({timeframe}) - ثقة: {signal_data['confidence']}%")
                             
-                            # إرسال إشعار التليجرام
-                            await notifier.send_signal_alert(coin_key, timeframe, signal_data)
+                            # إرسال إشعار التليجرام المبسط
+                            await notifier.send_simple_signal_alert(coin_key, timeframe, signal_data)
                             
                             # إرسال إشارة التنفيذ
                             trade_signal = {
@@ -429,22 +476,52 @@ async def market_scanner_task():
                             await asyncio.sleep(2)
                             
                     except Exception as e:
-                        logger.error(f"خطأ في معالجة {coin_key} ({timeframe}): {e}")
+                        logger.error(f"❌ خطأ في معالجة {coin_key} ({timeframe}): {e}")
                         continue
             
             system_stats["total_scans"] += 1
             system_stats["signals_generated"] += signals_found
             
             if signals_found > 0:
-                logger.info(f"اكتملت دورة المسح - تم العثور على {signals_found} إشارة")
+                logger.info(f"✅ اكتملت دورة المسح - تم العثور على {signals_found} إشارة")
             else:
-                logger.info("اكتملت دورة المسح - لا توجد إشارات قوية")
+                logger.info("✅ اكتملت دورة المسح - لا توجد إشارات قوية")
             
             await asyncio.sleep(SCAN_INTERVAL)
             
         except Exception as e:
-            logger.error(f"خطأ في المهمة الرئيسية: {e}")
+            logger.error(f"❌ خطأ في المهمة الرئيسية: {e}")
             await asyncio.sleep(60)
+
+async def heartbeat_task():
+    """مهمة إرسال النبضات الدورية كل ساعتين"""
+    logger.info("💓 بدء مهمة النبضات الدورية كل ساعتين")
+    
+    # انتظار 5 دقائق قبل أول نبضة
+    await asyncio.sleep(300)
+    
+    while True:
+        try:
+            # التحقق من اتصال المنفذ
+            executor_health = await executor_client.health_check()
+            
+            # إرسال النبضة
+            success = await notifier.send_heartbeat(
+                executor_connected=executor_health,
+                signals_count=system_stats["signals_sent"]
+            )
+            
+            if success:
+                logger.info("✅ تم إرسال النبضة الدورية بنجاح")
+            else:
+                logger.error("❌ فشل إرسال النبضة الدورية")
+                
+            # الانتظار ساعتين (7200 ثانية) قبل النبضة التالية
+            await asyncio.sleep(7200)
+                
+        except Exception as e:
+            logger.error(f"❌ خطأ في مهمة النبضات: {e}")
+            await asyncio.sleep(300)  # الانتظار 5 دقائق قبل إعادة المحاولة
 
 # =============================================================================
 # واجهات API
@@ -480,13 +557,20 @@ async def scan_coin(coin: str, timeframe: str = "1h"):
 @app.get("/system-stats")
 async def get_system_stats():
     uptime = time.time() - system_stats["start_time"]
+    hours = int(uptime // 3600)
+    minutes = int((uptime % 3600) // 60)
+    
     return {
+        "uptime": f"{hours} ساعة, {minutes} دقيقة",
         "uptime_seconds": uptime,
         "total_scans": system_stats["total_scans"],
         "signals_generated": system_stats["signals_generated"],
         "signals_sent": system_stats["signals_sent"],
+        "last_heartbeat": system_stats["last_heartbeat"],
         "confidence_threshold": CONFIDENCE_THRESHOLD,
-        "scan_interval": SCAN_INTERVAL
+        "scan_interval": SCAN_INTERVAL,
+        "supported_coins_count": len(SUPPORTED_COINS),
+        "timeframes": TIMEFRAMES
     }
 
 @app.get("/test-signal/{coin}")
@@ -499,7 +583,7 @@ async def test_signal(coin: str, timeframe: str = "1h"):
     signal_data = await data_fetcher.get_coin_data(coin_data['binance_symbol'], timeframe)
     
     # إرسال إشعار تجريبي
-    await notifier.send_signal_alert(coin, timeframe, signal_data)
+    await notifier.send_simple_signal_alert(coin, timeframe, signal_data)
     
     return {
         "coin": coin,
@@ -508,20 +592,76 @@ async def test_signal(coin: str, timeframe: str = "1h"):
         "test_alert_sent": True
     }
 
+@app.get("/test-heartbeat")
+async def test_heartbeat():
+    """اختبار إرسال نبضة يدوية"""
+    try:
+        executor_health = await executor_client.health_check()
+        success = await notifier.send_heartbeat(
+            executor_connected=executor_health,
+            signals_count=system_stats["signals_sent"]
+        )
+        
+        return {
+            "status": "success" if success else "error",
+            "executor_connected": executor_health,
+            "message": "تم إرسال النبضة بنجاح" if success else "فشل إرسال النبضة"
+        }
+    except Exception as e:
+        return {"status": "error", "message": str(e)}
+
+@app.get("/health")
+async def health_check():
+    """فحص صحة النظام"""
+    try:
+        # فحص اتصال البوت المنفذ
+        executor_health = await executor_client.health_check()
+        
+        return {
+            "status": "healthy",
+            "timestamp": datetime.now().isoformat(),
+            "executor_connected": executor_health,
+            "system_stats": {
+                "uptime_seconds": time.time() - system_stats["start_time"],
+                "total_scans": system_stats["total_scans"],
+                "signals_sent": system_stats["signals_sent"]
+            }
+        }
+    except Exception as e:
+        return {"status": "unhealthy", "error": str(e)}
+
 # =============================================================================
 # تشغيل التطبيق
 # =============================================================================
 
 @app.on_event("startup")
 async def startup_event():
-    logger.info("بدء تشغيل مولد الإشارات المبسط")
-    logger.info(f"العملات المدعومة: {list(SUPPORTED_COINS.keys())}")
-    logger.info(f"الأطر الزمنية: {TIMEFRAMES}")
-    logger.info(f"عتبة الثقة: {CONFIDENCE_THRESHOLD}")
-    logger.info(f"فاصل المسح: {SCAN_INTERVAL} ثانية")
+    logger.info("🚀 بدء تشغيل مولد الإشارات المبسط")
+    logger.info(f"🎯 العملات المدعومة: {list(SUPPORTED_COINS.keys())}")
+    logger.info(f"⏰ الأطر الزمنية: {TIMEFRAMES}")
+    logger.info(f"📊 عتبة الثقة: {CONFIDENCE_THRESHOLD}%")
+    logger.info(f"🔍 فاصل المسح: {SCAN_INTERVAL} ثانية")
+    logger.info(f"💓 فاصل النبضات: ساعتين")
     
-    # بدء المهمة الرئيسية
+    # إرسال نبضة بدء التشغيل
+    try:
+        executor_health = await executor_client.health_check()
+        await notifier.send_heartbeat(
+            executor_connected=executor_health, 
+            signals_count=system_stats["signals_sent"]
+        )
+    except Exception as e:
+        logger.error(f"❌ خطأ في إرسال نبضة البدء: {e}")
+    
+    # بدء المهام
     asyncio.create_task(market_scanner_task())
+    asyncio.create_task(heartbeat_task())
+    
+    logger.info("✅ تم بدء جميع المهام بنجاح")
+
+@app.on_event("shutdown")
+async def shutdown_event():
+    logger.info("🛑 إيقاف مولد الإشارات المبسط")
 
 if __name__ == "__main__":
     import uvicorn
