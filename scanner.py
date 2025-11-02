@@ -700,19 +700,20 @@ class TelegramNotifier:
         
         return message
     
-    async def send_heartbeat(self, executor_connected: bool, signals_count: int = 0) -> bool:
-        """إرسال نبضة اتصال"""
+    async def send_heartbeat(self, executor_connected: bool, signals_count: int = 0, 
+                        recent_analysis: Dict[str, Any] = None) -> bool:
+        """إرسال نبضة اتصال مع تحليل قوة الإشارات"""
         try:
             current_time = datetime.now().strftime('%H:%M %d/%m/%Y')
             uptime_seconds = time.time() - system_stats["start_time"]
             uptime_str = self._format_uptime(uptime_seconds)
-            
+        
             status_emoji = "✅" if executor_connected else "❌"
             status_text = "متصل" if executor_connected else "غير متصل"
-            
+        
             # إحصائيات الاستراتيجيات
             strategies_stats = system_stats["strategies_performance"]
-            
+        
             message = f"💓 **نبضة النظام المتقدم**\n"
             message += "─" * 35 + "\n"
             message += f"⏰ **الوقت:** `{current_time}`\n"
@@ -720,25 +721,72 @@ class TelegramNotifier:
             message += f"🔗 **الاتصال بالمنفذ:** {status_emoji} `{status_text}`\n"
             message += f"📊 **الإشارات المرسلة:** `{signals_count}`\n"
             message += f"🔍 **المسحات الكلية:** `{system_stats['total_scans']}`\n\n"
-            
+        
             message += "**أداء الاستراتيجيات:**\n"
             for strategy_name, stats in strategies_stats.items():
                 success_rate = (stats["signals"] / stats["calls"] * 100) if stats["calls"] > 0 else 0
                 message += f"• **{strategy_name}:** `{stats['signals']}/{stats['calls']}` ({success_rate:.1f}%)\n"
+        
+            # قسم تحليل قوة الإشارات (الجديد)
+            if recent_analysis:
+                message += "\n**📈 تحليل قوة الإشارات الأخيرة:**\n"
             
+                for coin, analysis in recent_analysis.items():
+                    if analysis and analysis.get('strategies_analysis'):
+                        strategies_data = analysis['strategies_analysis']
+                    
+                        # حساب قوة الإشارة الإجمالية
+                        active_signals = []
+                        for strategy_name, strat_data in strategies_data.items():
+                            if strat_data['signal'] != 'none' and strat_data['confidence'] > 0:
+                                active_signals.append({
+                                    'strategy': strategy_name,
+                                    'signal': strat_data['signal'],
+                                    'confidence': strat_data['confidence']
+                                })
+                    
+                        if active_signals:
+                            # تجميع الإشارات المتشابهة
+                            buy_signals = [s for s in active_signals if s['signal'] == 'BUY']
+                            sell_signals = [s for s in active_signals if s['signal'] == 'SELL']
+                        
+                            if buy_signals and not sell_signals:
+                                avg_confidence = sum(s['confidence'] for s in buy_signals) / len(buy_signals)
+                                emoji = "🟢" if avg_confidence >= 40 else "🟡"
+                                message += f"{emoji} **{coin.upper()}:** اتجاه شراء ({len(buy_signals)}/3) - قوة: {avg_confidence:.1f}%\n"
+                            
+                            elif sell_signals and not buy_signals:
+                                avg_confidence = sum(s['confidence'] for s in sell_signals) / len(sell_signals)
+                                emoji = "🔴" if avg_confidence >= 40 else "🟠"
+                                message += f"{emoji} **{coin.upper()}:** اتجاه بيع ({len(sell_signals)}/3) - قوة: {avg_confidence:.1f}%\n"
+                            
+                            else:
+                                # تضارب
+                                buy_avg = sum(s['confidence'] for s in buy_signals) / len(buy_signals) if buy_signals else 0
+                                sell_avg = sum(s['confidence'] for s in sell_signals) / len(sell_signals) if sell_signals else 0
+                                message += f"⚡ **{coin.upper()}:** تضارب (شراء: {buy_avg:.1f}% | بيع: {sell_avg:.1f}%)\n"
+                    
+                        else:
+                            # لا توجد إشارات نشطة
+                            max_confidence = max([strat_data['confidence'] for strat_data in strategies_data.values()])
+                            if max_confidence > 20:
+                                message += f"⚪ **{coin.upper()}:** إشارات ضعيفة (أعلى: {max_confidence}%)\n"
+                            else:
+                                message += f"⚫ **{coin.upper()}:** لا توجد إشارات\n"
+        
             message += "─" * 35 + "\n"
             message += "✅ **جميع الأنظمة تعمل بشكل طبيعي**"
-            
+        
             payload = {
                 'chat_id': self.chat_id,
                 'text': message,
                 'parse_mode': 'Markdown'
             }
-            
+        
             async with httpx.AsyncClient() as client:
                 response = await client.post(f"{self.base_url}/sendMessage", 
-                                           json=payload, timeout=10.0)
-            
+                                       json=payload, timeout=10.0)
+        
             if response.status_code == 200:
                 logger.info("💓 تم إرسال نبضة النظام بنجاح")
                 system_stats["last_heartbeat"] = current_time
@@ -746,7 +794,7 @@ class TelegramNotifier:
             else:
                 logger.error(f"❌ فشل إرسال النبضة: {response.status_code}")
                 return False
-                
+            
         except Exception as e:
             logger.error(f"❌ خطأ في إرسال النبضة: {e}")
             return False
@@ -827,19 +875,27 @@ executor_client = ExecutorBotClient(EXECUTOR_BOT_URL, EXECUTOR_BOT_API_KEY)
 # المهام الأساسية
 # =============================================================================
 
+# إضافة متغير عالمي لتخزين آخر تحليل
+recent_analysis = {}
+
 async def advanced_market_scanner_task():
     """المهمة الرئيسية للمسح الضوئي المتقدم"""
+    global recent_analysis
     logger.info("🚀 بدء مهمة مسح السوق المتقدم كل 5 دقائق")
     
     while True:
         try:
             signals_found = 0
             scan_results = []
+            current_analysis = {}  # تحليل هذه الدورة
             
             for coin_key, coin_data in SUPPORTED_COINS.items():
                 try:
                     # جلب البيانات وتحليلها
                     analysis_result = await data_fetcher.get_coin_data(coin_data['binance_symbol'], TIMEFRAME)
+                    
+                    # حفظ التحليل الحالي
+                    current_analysis[coin_key] = analysis_result
                     
                     # إذا كانت هناك إشارة قوية
                     if (analysis_result["signal"] != "none" and 
@@ -857,6 +913,9 @@ async def advanced_market_scanner_task():
                 except Exception as e:
                     logger.error(f"❌ خطأ في معالجة {coin_key}: {e}")
                     continue
+            
+            # تحديث التحليل الأخير
+            recent_analysis = current_analysis
             
             # إرسال إشعار موحد بجميع الإشارات
             if signals_found > 0:
@@ -878,7 +937,7 @@ async def advanced_market_scanner_task():
                     }
                     
                     await executor_client.send_trade_signal(trade_signal)
-                    await asyncio.sleep(1)  # انتظار بين الإشارات
+                    await asyncio.sleep(1)
             
             system_stats["total_scans"] += 1
             system_stats["signals_generated"] += signals_found
@@ -893,6 +952,34 @@ async def advanced_market_scanner_task():
         except Exception as e:
             logger.error(f"❌ خطأ في المهمة الرئيسية: {e}")
             await asyncio.sleep(60)
+
+async def heartbeat_task():
+    """مهمة إرسال النبضات الدورية مع تحليل الإشارات"""
+    global recent_analysis
+    logger.info("💓 بدء مهمة النبضات الدورية كل ساعتين")
+    
+    await asyncio.sleep(300)
+    
+    while True:
+        try:
+            executor_health = await executor_client.health_check()
+            
+            success = await notifier.send_heartbeat(
+                executor_connected=executor_health,
+                signals_count=system_stats["signals_sent"],
+                recent_analysis=recent_analysis  # إضافة التحليل الأخير
+            )
+            
+            if success:
+                logger.info("✅ تم إرسال النبضة الدورية بنجاح")
+            else:
+                logger.error("❌ فشل إرسال النبضة الدورية")
+                
+            await asyncio.sleep(7200)
+                
+        except Exception as e:
+            logger.error(f"❌ خطأ في مهمة النبضات: {e}")
+            await asyncio.sleep(300)
 
 async def send_unified_alert(scan_results: List[Dict]):
     """إرسال إشعار موحد بجميع الإشارات"""
@@ -932,31 +1019,6 @@ async def send_unified_alert(scan_results: List[Dict]):
     except Exception as e:
         logger.error(f"❌ خطأ في إرسال التقرير الموحد: {e}")
 
-async def heartbeat_task():
-    """مهمة إرسال النبضات الدورية"""
-    logger.info("💓 بدء مهمة النبضات الدورية كل ساعتين")
-    
-    await asyncio.sleep(300)  # انتظار 5 دقائق قبل أول نبضة
-    
-    while True:
-        try:
-            executor_health = await executor_client.health_check()
-            
-            success = await notifier.send_heartbeat(
-                executor_connected=executor_health,
-                signals_count=system_stats["signals_sent"]
-            )
-            
-            if success:
-                logger.info("✅ تم إرسال النبضة الدورية بنجاح")
-            else:
-                logger.error("❌ فشل إرسال النبضة الدورية")
-                
-            await asyncio.sleep(7200)  # الانتظار ساعتين
-                
-        except Exception as e:
-            logger.error(f"❌ خطأ في مهمة النبضات: {e}")
-            await asyncio.sleep(300)
 
 # =============================================================================
 # واجهات API
