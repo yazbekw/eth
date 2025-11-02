@@ -22,7 +22,7 @@ EXECUTE_TRADES = os.getenv("EXECUTE_TRADES", "false").lower() == "true"
 
 # إعدادات التداول
 SCAN_INTERVAL = 300  # 5 دقائق بين كل فحص
-CONFIDENCE_THRESHOLD = 60  # عتبة الثقة
+CONFIDENCE_THRESHOLD = 61  # عتبة الثقة
 
 # العملات المدعومة
 SUPPORTED_COINS = {
