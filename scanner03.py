@@ -22,10 +22,10 @@ EXECUTOR_BOT_API_KEY = os.getenv("EXECUTOR_BOT_API_KEY", "")
 EXECUTE_TRADES = os.getenv("EXECUTE_TRADES", "false").lower() == "true"
 
 # إعدادات التداول
-SCAN_INTERVAL = 300  # 5 دقائق بين كل فحص
-CONFIDENCE_THRESHOLD_SINGLE = 60  # عتبة الإشارة الواحدة
-CONFIDENCE_THRESHOLD_MULTIPLE = 55  # عتبة الإشارات المتعددة
-MIN_STRATEGY_CONFIDENCE = 40  # أقل ثقة للاستراتيجيات المحتسبة
+SCAN_INTERVAL = 900  # 5 دقائق بين كل فحص
+CONFIDENCE_THRESHOLD_SINGLE = 65  # عتبة الإشارة الواحدة
+CONFIDENCE_THRESHOLD_MULTIPLE = 61  # عتبة الإشارات المتعددة
+MIN_STRATEGY_CONFIDENCE = 45  # أقل ثقة للاستراتيجيات المحتسبة
 
 # العملات المدعومة
 SUPPORTED_COINS = {
