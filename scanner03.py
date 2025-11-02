@@ -815,7 +815,7 @@ class TelegramNotifier:
                 logger.info(f"📨 تم إرسال إشعار إشارة متقدم لـ {coin}")
                 return True
             else:
-                logger.error(f"❌ فشل إرسال الإشعار: {response.status_code}")
+                logger.error(f"❌ فشل إرسال الإشعار: {response.status_code} - {response.text}")
                 return False
                 
         except Exception as e:
@@ -843,31 +843,31 @@ class TelegramNotifier:
         
         source_emoji = "🔵" if data_source == "binance" else "🟡" if data_source == "coingecko" else "🟢"
         
-        message = f"{emoji} **إشارة {action} {action_emoji} - {coin.upper()}**\n"
+        message = f"{emoji} *إشارة {action} {action_emoji} - {coin.upper()}*\n"
         message += "─" * 40 + "\n"
-        message += f"💰 **السعر:** `${price:,.2f}`\n"
-        message += f"🎯 **الثقة النهائية:** `{confidence}%`\n"
-        message += f"📊 **الاستراتيجيات:** `{winning_strategies}/{total_strategies}`\n"
-        message += f"📡 **مصدر البيانات:** {source_emoji} `{data_source}`\n"
-        message += f"⏰ **الإطار:** `{TIMEFRAME}`\n\n"
+        message += f"💰 *السعر:* `${price:,.2f}`\n"
+        message += f"🎯 *الثقة النهائية:* `{confidence}%`\n"
+        message += f"📊 *الاستراتيجيات:* `{winning_strategies}/{total_strategies}`\n"
+        message += f"📡 *مصدر البيانات:* {source_emoji} `{data_source}`\n"
+        message += f"⏰ *الإطار:* `{TIMEFRAME}`\n\n"
         
-        message += "**تحليل الاستراتيجيات:**\n"
+        message += "*تحليل الاستراتيجيات:*\n"
         for strategy_name, analysis in strategies_analysis.items():
             status_emoji = "✅" if analysis["signal"] == signal_type else "➖" if analysis["signal"] == "none" else "❌"
             display_name = strategy_name.replace('_', ' ').title()
             signal_emoji = "🟢" if analysis["signal"] == "BUY" else "🔴" if analysis["signal"] == "SELL" else "⚪"
-            message += f"{status_emoji} **{display_name}:** {signal_emoji} `{analysis['confidence']}%`"
+            message += f"{status_emoji} *{display_name}:* {signal_emoji} `{analysis['confidence']}%`"
             if analysis["signal"] != "none" and analysis["signal"] != signal_type:
                 message += f" (⚠️ {analysis['signal']})"
             message += "\n"
         
-        message += "\n**الأسباب:**\n"
+        message += "\n*الأسباب:*\n"
         for i, reason in enumerate(signal_data["reasons"][:5], 1):
             message += f"• {reason}\n"
         
         message += "─" * 40 + "\n"
-        message += f"🕒 **الوقت:** `{datetime.now().strftime('%H:%M %d/%m')}`\n"
-        message += "⚡ **المحرك المتقدم للإشارات**"
+        message += f"🕒 *الوقت:* `{datetime.now().strftime('%H:%M %d/%m')}`\n"
+        message += "⚡ *المحرك المتقدم للإشارات*"
         
         return message
     
@@ -885,30 +885,32 @@ class TelegramNotifier:
             strategies_stats = system_stats["strategies_performance"]
             data_stats = system_stats["data_source_stats"]
         
-            message = f"💓 **نبضة النظام المتقدم**\n"
+            message = f"💓 *نبضة النظام المتقدم*\n"
             message += "─" * 40 + "\n"
-            message += f"⏰ **الوقت:** `{current_time}`\n"
-            message += f"⏱️ **مدة التشغيل:** `{uptime_str}`\n"
-            message += f"🔗 **الاتصال بالمنفذ:** {status_emoji} `{status_text}`\n"
-            message += f"📊 **الإشارات المرسلة:** `{signals_count}`\n"
-            message += f"🔍 **المسحات الكلية:** `{system_stats['total_scans']}`\n\n"
+            message += f"⏰ *الوقت:* `{current_time}`\n"
+            message += f"⏱️ *مدة التشغيل:* `{uptime_str}`\n"
+            message += f"🔗 *الاتصال بالمنفذ:* {status_emoji} `{status_text}`\n"
+            message += f"📊 *الإشارات المرسلة:* `{signals_count}`\n"
+            message += f"🔍 *المسحات الكلية:* `{system_stats['total_scans']}`\n\n"
         
-            message += "**أداء الاستراتيجيات:**\n"
+            message += "*أداء الاستراتيجيات:*\n"
             for strategy_name, stats in strategies_stats.items():
                 success_rate = (stats["signals"] / stats["calls"] * 100) if stats["calls"] > 0 else 0
                 display_name = strategy_name.replace('_', ' ').title()
-                message += f"• **{display_name}:** `{stats['signals']}/{stats['calls']}` ({success_rate:.1f}%)\n"
+                message += f"• *{display_name}:* `{stats['signals']}/{stats['calls']}` ({success_rate:.1f}%)\n"
             
-            message += "\n**مصادر البيانات:**\n"
+            message += "\n*مصادر البيانات:*\n"
             for source_name, stats in data_stats.items():
                 total = stats["success"] + stats["failed"]
                 success_rate = (stats["success"] / total * 100) if total > 0 else 0
                 source_emoji = "🔵" if source_name == "binance" else "🟡" if source_name == "coingecko" else "🟢"
-                message += f"• {source_emoji} **{source_name.title()}:** `{stats['success']}/{total}` ({success_rate:.1f}%)\n"
+                # إزالة النقاط من أسماء المصادر لتجنب مشاكل Markdown
+                clean_source_name = source_name.replace('_', ' ').title()
+                message += f"• {source_emoji} *{clean_source_name}:* `{stats['success']}/{total}` ({success_rate:.1f}%)\n"
         
-            # قسم تحليل قوة الإشارات - محسن
+            # قسم تحليل قوة الإشارات - محسن وآمن
             if recent_analysis:
-                message += "\n**📈 تحليل قوة الإشارات الأخيرة:**\n"
+                message += "\n*📈 تحليل قوة الإشارات الأخيرة:*\n"
                 
                 signals_summary = []
                 for coin, analysis in recent_analysis.items():
@@ -916,66 +918,57 @@ class TelegramNotifier:
                         strategies_data = analysis['strategies_analysis']
                         data_source = analysis.get('data_source', 'unknown')
                         source_emoji = "🔵" if data_source == "binance" else "🟡" if data_source == "coingecko" else "🟢"
-                        current_price = analysis.get('current_price', 0)
                         
                         # تحليل جميع الإشارات
                         buy_signals = []
                         sell_signals = []
-                        all_signals = []
                         
                         for strategy_name, strat_data in strategies_data.items():
                             if strat_data['signal'] == 'BUY' and strat_data['confidence'] > 0:
                                 buy_signals.append(strat_data['confidence'])
-                                all_signals.append(('BUY', strat_data['confidence']))
                             elif strat_data['signal'] == 'SELL' and strat_data['confidence'] > 0:
                                 sell_signals.append(strat_data['confidence'])
-                                all_signals.append(('SELL', strat_data['confidence']))
                         
-                        if all_signals:
-                            # حساب القوة الإجمالية
-                            if buy_signals and not sell_signals:
-                                avg_confidence = sum(buy_signals) / len(buy_signals)
-                                max_confidence = max(buy_signals)
-                                signal_emoji = "🟢"
-                                signal_text = "شراء"
-                                strength_emoji = "💪" if avg_confidence >= 60 else "👍" if avg_confidence >= 40 else "👎"
-                                signals_summary.append(f"{signal_emoji} **{coin.upper()}:** {signal_text} ({len(buy_signals)}/3) - {avg_confidence:.1f}% {strength_emoji} {source_emoji}")
-                                
-                            elif sell_signals and not buy_signals:
-                                avg_confidence = sum(sell_signals) / len(sell_signals)
-                                max_confidence = max(sell_signals)
-                                signal_emoji = "🔴"
-                                signal_text = "بيع"
-                                strength_emoji = "💪" if avg_confidence >= 60 else "👍" if avg_confidence >= 40 else "👎"
-                                signals_summary.append(f"{signal_emoji} **{coin.upper()}:** {signal_text} ({len(sell_signals)}/3) - {avg_confidence:.1f}% {strength_emoji} {source_emoji}")
-                                
+                        if buy_signals and sell_signals:
+                            # تضارب
+                            buy_avg = sum(buy_signals) / len(buy_signals) if buy_signals else 0
+                            sell_avg = sum(sell_signals) / len(sell_signals) if sell_signals else 0
+                            buy_count = len(buy_signals)
+                            sell_count = len(sell_signals)
+                            
+                            if buy_count > sell_count:
+                                dominant_signal = "🟢 شراء"
+                                dominant_strength = buy_avg
+                            elif sell_count > buy_count:
+                                dominant_signal = "🔴 بيع" 
+                                dominant_strength = sell_avg
                             else:
-                                # تضارب
-                                buy_avg = sum(buy_signals) / len(buy_signals) if buy_signals else 0
-                                sell_avg = sum(sell_signals) / len(sell_signals) if sell_signals else 0
-                                buy_count = len(buy_signals)
-                                sell_count = len(sell_signals)
-                                
-                                if buy_count > sell_count:
-                                    dominant_signal = "🟢 شراء"
-                                    dominant_strength = buy_avg
-                                elif sell_count > buy_count:
-                                    dominant_signal = "🔴 بيع" 
-                                    dominant_strength = sell_avg
-                                else:
-                                    dominant_signal = "⚖️ متعادل"
-                                    dominant_strength = max(buy_avg, sell_avg)
-                                
-                                signals_summary.append(f"⚡ **{coin.upper()}:** {dominant_signal} ({buy_count}/{sell_count}) - {dominant_strength:.1f}% {source_emoji}")
+                                dominant_signal = "⚖️ متعادل"
+                                dominant_strength = max(buy_avg, sell_avg)
+                            
+                            signals_summary.append(f"⚡ *{coin.upper()}:* {dominant_signal} ({buy_count}/{sell_count}) - {dominant_strength:.1f}% {source_emoji}")
+                            
+                        elif buy_signals:
+                            # اتجاه شراء
+                            avg_confidence = sum(buy_signals) / len(buy_signals)
+                            strength_emoji = "💪" if avg_confidence >= 60 else "👍" if avg_confidence >= 40 else "👎"
+                            signals_summary.append(f"🟢 *{coin.upper()}:* شراء ({len(buy_signals)}/3) - {avg_confidence:.1f}% {strength_emoji} {source_emoji}")
+                            
+                        elif sell_signals:
+                            # اتجاه بيع
+                            avg_confidence = sum(sell_signals) / len(sell_signals)
+                            strength_emoji = "💪" if avg_confidence >= 60 else "👍" if avg_confidence >= 40 else "👎"
+                            signals_summary.append(f"🔴 *{coin.upper()}:* بيع ({len(sell_signals)}/3) - {avg_confidence:.1f}% {strength_emoji} {source_emoji}")
+                            
                         else:
                             # لا توجد إشارات نشطة
-                            max_confidence = max([strat_data['confidence'] for strat_data in strategies_data.values()])
+                            max_confidence = max([strat_data.get('confidence', 0) for strat_data in strategies_data.values()])
                             if max_confidence > 20:
-                                signals_summary.append(f"⚪ **{coin.upper()}:** إشارات ضعيفة (أعلى: {max_confidence}%) {source_emoji}")
+                                signals_summary.append(f"⚪ *{coin.upper()}:* إشارات ضعيفة (أعلى: {max_confidence}%) {source_emoji}")
                             else:
-                                signals_summary.append(f"⚫ **{coin.upper()}:** لا توجد إشارات {source_emoji}")
+                                signals_summary.append(f"⚫ *{coin.upper()}:* لا توجد إشارات {source_emoji}")
                     else:
-                        signals_summary.append(f"⚫ **{coin.upper()}:** بيانات غير متوفرة")
+                        signals_summary.append(f"⚫ *{coin.upper()}:* بيانات غير متوفرة")
                 
                 # عرض الإشارات مرتبة حسب القوة
                 if signals_summary:
@@ -984,16 +977,17 @@ class TelegramNotifier:
                 else:
                     message += "⚫ لا توجد بيانات للعرض\n"
             else:
-                message += "\n**📈 تحليل قوة الإشارات الأخيرة:**\n"
+                message += "\n*📈 تحليل قوة الإشارات الأخيرة:*\n"
                 message += "⚫ لا توجد بيانات حديثة\n"
         
             message += "─" * 40 + "\n"
-            message += "✅ **جميع الأنظمة تعمل بشكل طبيعي**"
+            message += "✅ *جميع الأنظمة تعمل بشكل طبيعي*"
         
             payload = {
                 'chat_id': self.chat_id,
                 'text': message,
-                'parse_mode': 'Markdown'
+                'parse_mode': 'Markdown',
+                'disable_web_page_preview': True
             }
         
             async with httpx.AsyncClient() as client:
@@ -1005,7 +999,23 @@ class TelegramNotifier:
                 system_stats["last_heartbeat"] = current_time
                 return True
             else:
-                logger.error(f"❌ فشل إرسال النبضة: {response.status_code}")
+                logger.error(f"❌ فشل إرسال النبضة: {response.status_code} - {response.text}")
+                # محاولة إرسال بدون Markdown كحل بديل
+                try:
+                    plain_message = message.replace('*', '').replace('`', '').replace('_', '')
+                    plain_payload = {
+                        'chat_id': self.chat_id,
+                        'text': plain_message,
+                        'disable_web_page_preview': True
+                    }
+                    retry_response = await client.post(f"{self.base_url}/sendMessage", 
+                                                    json=plain_payload, timeout=10.0)
+                    if retry_response.status_code == 200:
+                        logger.info("💓 تم إرسال النبضة بنجاح (بدون تنسيق Markdown)")
+                        return True
+                except Exception as retry_error:
+                    logger.error(f"❌ فشل إرسال النبضة حتى بدون تنسيق: {retry_error}")
+                
                 return False
             
         except Exception as e:
@@ -1021,6 +1031,8 @@ class TelegramNotifier:
             return f"{hours} ساعة, {minutes} دقيقة"
         else:
             return f"{minutes} دقيقة"
+                                
+
 
 class ExecutorBotClient:
     """عميل للتواصل مع بوت التنفيذ"""
