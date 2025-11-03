@@ -1043,30 +1043,30 @@ class TelegramNotifier:
         """إرسال تقرير تحليل السوق التفصيلي (الوضع المختلط)"""
         try:
             current_time = datetime.now().strftime('%H:%M %d/%m')
-            
+        
             message = f"📊 **تقرير تحليل السوق التفصيلي**\n"
             message += "─" * 40 + "\n"
             message += f"⏰ **الوقت:** `{current_time}`\n"
             message += f"🔢 **رقم المسح:** `{scan_count}`\n"
             message += f"💰 **العملات:** `{len(current_analysis)}`\n\n"
-            
+        
             analysis_found = False
-            
+        
             for coin_key, analysis in current_analysis.items():
                 if analysis and analysis.get('success'):
                     data_source = analysis.get('data_source', 'unknown')
                     source_emoji = "🟠" if data_source == "coinex" else "🔵" if data_source == "binance" else "⚪"
-                    
+                
                     strategies_analysis = analysis.get('strategies_analysis', {})
                     buy_signals = []
                     sell_signals = []
-                    
+                
                     for strategy_name, strat_data in strategies_analysis.items():
-                        if strat_data['signal'] == 'BUY' and strat_data['confidence'] > 0:
+                        if strat_data and strat_data.get('signal') == 'BUY' and strat_data.get('confidence', 0) > 0:
                             buy_signals.append(strat_data['confidence'])
-                        elif strat_data['signal'] == 'SELL' and strat_data['confidence'] > 0:
+                        elif strat_data and strat_data.get('signal') == 'SELL' and strat_data.get('confidence', 0) > 0:
                             sell_signals.append(strat_data['confidence'])
-                    
+                
                     if buy_signals and sell_signals:
                         # تضارب في الإشارات
                         buy_avg = sum(buy_signals) / len(buy_signals)
@@ -1076,7 +1076,7 @@ class TelegramNotifier:
                         message += f"   🟢 شراء: {len(buy_signals)} إشارة (متوسط: {buy_avg:.1f}%)\n"
                         message += f"   🔴 بيع: {len(sell_signals)} إشارة (متوسط: {sell_avg:.1f}%)\n"
                         message += f"   📡 مصدر: {source_emoji}\n\n"
-                    
+                
                     elif buy_signals:
                         # اتجاه شراء
                         avg_confidence = sum(buy_signals) / len(buy_signals)
@@ -1088,7 +1088,7 @@ class TelegramNotifier:
                         message += f"   🟢 استراتيجيات: {len(buy_signals)}/3\n"
                         message += f"   💪 قوة: {avg_confidence:.1f}%\n"
                         message += f"   📡 مصدر: {source_emoji}\n\n"
-                    
+                
                     elif sell_signals:
                         # اتجاه بيع
                         avg_confidence = sum(sell_signals) / len(sell_signals)
@@ -1100,40 +1100,45 @@ class TelegramNotifier:
                         message += f"   🔴 استراتيجيات: {len(sell_signals)}/3\n"
                         message += f"   💪 قوة: {avg_confidence:.1f}%\n"
                         message += f"   📡 مصدر: {source_emoji}\n\n"
-                    
+                
                     else:
                         # لا توجد إشارات نشطة
-                        max_confidence = max([strat_data.get('confidence', 0) for strat_data in strategies_analysis.values()])
-                        if max_confidence > 0:
+                        confidences = []
+                        for strat_data in strategies_analysis.values():
+                            if strat_data and strat_data.get('confidence', 0) > 0:
+                                confidences.append(strat_data['confidence'])
+                    
+                        if confidences:
+                            max_confidence = max(confidences)
                             message += f"⚪ **{coin_key.upper()}:** إشارات ضعيفة (أعلى: {max_confidence}%) {source_emoji}\n\n"
                         else:
                             message += f"⚫ **{coin_key.upper()}:** لا توجد إشارات {source_emoji}\n\n"
-            
+        
             if not analysis_found:
                 message += "📭 **لا توجد إشارات تحليلية قوية في هذه الجولة**\n\n"
-            
+        
             message += "─" * 40 + "\n"
             message += "💡 *ملاحظة: هذا تحليل تفصيلي وليس بالضرورة إشارات تداول*\n"
             message += f"🎯 *عتبة الإشارة:* `{CONFIDENCE_THRESHOLD_SINGLE}%`"
-            
+        
             payload = {
                 'chat_id': self.chat_id,
                 'text': message,
                 'parse_mode': 'Markdown',
                 'disable_web_page_preview': True
             }
-            
+        
             async with httpx.AsyncClient() as client:
                 response = await client.post(f"{self.base_url}/sendMessage", 
-                                           json=payload, timeout=10.0)
-            
+                                       json=payload, timeout=10.0)
+        
             if response.status_code == 200:
                 logger.info("📊 تم إرسال تقرير التحليل التفصيلي")
                 return True
             else:
                 logger.error(f"❌ فشل إرسال تقرير التحليل: {response.status_code}")
                 return False
-                
+            
         except Exception as e:
             logger.error(f"❌ خطأ في إرسال تقرير التحليل: {e}")
             return False
