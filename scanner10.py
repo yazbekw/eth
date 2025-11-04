@@ -1235,12 +1235,30 @@ class StrategyAnalysisReportGenerator:
     
     def __init__(self, notifier):
         self.notifier = notifier
+
+
+
+
+class StrategyAnalysisReportGenerator:
+    """مولد التقارير التحليلية التفصيلية"""
+    
+    def __init__(self, notifier):
+        self.notifier = notifier
+    
+    def _clean_markdown(self, text: str) -> str:
+        """تنظيف النص من الأحرف الخاصة في Markdown"""
+        # هروب الأحرف الخاصة في Markdown
+        special_chars = ['_', '*', '[', ']', '(', ')', '~', '`', '>', '#', '+', '-', '=', '|', '{', '}', '.', '!']
+        for char in special_chars:
+            text = text.replace(char, f'\\{char}')
+        return text
     
     def create_strategy_analysis_report(self, analysis_report: Dict[str, Any]) -> str:
         """إنشاء تقرير تحليلي تفصيلي يظهر كيفية توليد الإشارات"""
         try:
             report_time = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
             
+            # استخدام الدالة الجديدة لتنظيف النصوص
             message = f"🔍 **تقرير التحليل التفصيلي - نظام التقييم المحسن**\n"
             message += "═" * 60 + "\n"
             message += f"⏰ **وقت التقرير:** `{report_time}`\n"
@@ -1258,7 +1276,9 @@ class StrategyAnalysisReportGenerator:
                 sell = stats['sell_signals']
                 avg_confidence = stats['avg_confidence']
                 
-                message += f"• **{display_name}:** {total} إشارة (🟢 {buy} شراء | 🔴 {sell} بيع) - متوسط الثقة: {avg_confidence}%\n"
+                # تنظيف النص
+                clean_display_name = self._clean_markdown(display_name)
+                message += f"• **{clean_display_name}:** {total} إشارة (🟢 {buy} شراء | 🔴 {sell} بيع) - متوسط الثقة: {avg_confidence}%\n"
             
             message += "\n"
             message += "🔎 **التفاصيل حسب العملة والاستراتيجية:**\n"
@@ -1279,7 +1299,11 @@ class StrategyAnalysisReportGenerator:
                 
                 source_emoji = "🟠" if data_source == "coinex" else "🔵" if data_source == "binance" else "⚪"
                 
-                message += f"\n**{coin_name} ({coin_key.upper()})** {source_emoji}\n"
+                # تنظيف النصوص
+                clean_coin_name = self._clean_markdown(coin_name)
+                clean_coin_key = self._clean_markdown(coin_key.upper())
+                
+                message += f"\n**{clean_coin_name} ({clean_coin_key})** {source_emoji}\n"
                 message += f"💰 **السعر:** `${current_price:,.2f}`\n"
                 
                 # الإشارة النهائية مع تفاصيل التعزيز
@@ -1308,17 +1332,19 @@ class StrategyAnalysisReportGenerator:
                     analysis_details = strategy_data.get('analysis_details', {})
                     
                     strategy_display = self._get_strategy_display_name(strategy_name)
+                    clean_strategy_display = self._clean_markdown(strategy_display)
                     
                     if signal != 'none':
                         signal_emoji = "🟢" if signal == 'BUY' else "🔴"
-                        message += f"  {signal_emoji} **{strategy_display}:** {signal} ({confidence}%)\n"
+                        message += f"  {signal_emoji} **{clean_strategy_display}:** {signal} ({confidence}%)\n"
                         
                         # عرض تفاصيل التحليل
                         analysis_text = self._format_analysis_details(strategy_name, analysis_details)
                         if analysis_text:
-                            message += f"    📈 {analysis_text}\n"
+                            clean_analysis_text = self._clean_markdown(analysis_text)
+                            message += f"    📈 {clean_analysis_text}\n"
                     else:
-                        message += f"  ⚪ **{strategy_display}:** لا إشارة ({confidence}%)\n"
+                        message += f"  ⚪ **{clean_strategy_display}:** لا إشارة ({confidence}%)\n"
                 
                 message += "─" * 40 + "\n"
             
@@ -1336,8 +1362,10 @@ class StrategyAnalysisReportGenerator:
             
         except Exception as e:
             logger.error(f"❌ خطأ في إنشاء التقرير التحليلي: {e}")
-            return f"❌ خطأ في إنشاء التقرير التحليلي: {e}"
+            return f"❌ خطأ في إنشاء التقرير التحليلي: {e}"    
     
+                        message += f"🎯 **الإشارة النهائية:** ⚪ **لا توجد إشارة واضحة**\n"
+                    
     def _get_strategy_display_name(self, strategy_name: str) -> str:
         """الحصول على اسم عرضي للاستراتيجية"""
         names = {
