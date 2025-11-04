@@ -1534,6 +1534,47 @@ class ExecutorBotClient:
             logger.error(f"❌ فحص صحة البوت المنفذ فشل: {e}")
             return False
 
+
+    async def send_trade_signal(self, signal_data: Dict[str, Any]) -> bool:
+        """إرسال إشارة تداول إلى البوت المنفذ"""
+        if not EXECUTE_TRADES:
+            logger.info("🔒 تنفيذ الصفقات معطل في الإعدادات")
+            return False
+            
+        try:
+            headers = {
+                "Authorization": f"Bearer {self.api_key}",
+                "Content-Type": "application/json"
+            }
+            
+            payload = {
+                "signal": signal_data,
+                "timestamp": time.time(),
+                "source": "advanced_signal_generator_v3.0",
+                "system_stats": system_stats
+            }
+            
+            response = await self.client.post(
+                f"{self.base_url}/api/trade/signal",
+                json=payload,
+                headers=headers
+            )
+            
+            if response.status_code == 200:
+                result = response.json()
+                logger.info(f"✅ تم إرسال إشارة للتنفيذ: {result.get('message', '')}")
+                system_stats["total_signals_sent"] += 1
+                return True
+            else:
+                logger.error(f"❌ فشل إرسال الإشارة: {response.status_code} - {response.text}")
+                return False
+                
+        except Exception as e:
+            logger.error(f"❌ خطأ في التواصل مع البوت المنفذ: {e}")
+            return False
+
+    # ... باقي الدوال الموجودة ...
+
 # =============================================================================
 # التهيئة
 # =============================================================================
@@ -1543,6 +1584,37 @@ notifier = TelegramNotifier(TELEGRAM_BOT_TOKEN, TELEGRAM_CHAT_ID)
 executor_client = ExecutorBotClient(EXECUTOR_BOT_URL, EXECUTOR_BOT_API_KEY)
 analysis_report_generator = StrategyAnalysisReportGenerator(notifier)
 
+
+async def prepare_trade_signal(coin_key: str, coin_data: Dict, timeframe: str, 
+                             analysis: Dict, current_price: float) -> Optional[Dict[str, Any]]:
+    """تحضير بيانات إشارة التداول للبوت المنفذ"""
+    try:
+        signal_type = analysis["signal"]  # 'BUY' or 'SELL'
+        confidence = analysis["confidence"]
+        
+        # تحضير بيانات الإشارة
+        signal_data = {
+            "coin": coin_key,
+            "symbol": coin_data["binance_symbol"],
+            "action": signal_type,
+            "signal_type": "TRADE_SIGNAL",
+            "timeframe": timeframe,
+            "price": current_price,
+            "confidence_score": confidence,
+            "reason": " | ".join(analysis.get("reasons", [])),
+            "analysis": analysis.get("analysis_details", {}),
+            "strategies_analysis": analysis.get("strategies_analysis", {}),
+            "timestamp": time.time(),
+            "syria_time": datetime.now().strftime('%H:%M %d/%m/%Y'),
+            "system_version": "3.0.0",
+            "enhancement_details": analysis.get("enhancement_details", {})
+        }
+        
+        return signal_data
+        
+    except Exception as e:
+        logger.error(f"❌ خطأ في تحضير إشارة التداول لـ {coin_key}: {e}")
+        return None
 # =============================================================================
 # المهام الأساسية مع نظام التقارير التحليلية
 # =============================================================================
@@ -1559,6 +1631,7 @@ async def advanced_market_scanner_task():
     while True:
         try:
             current_analysis = {}
+            signals_sent = 0
             
             logger.info(f"🔍 بدء مسح {len(SUPPORTED_COINS)} عملة...")
             
@@ -1569,22 +1642,38 @@ async def advanced_market_scanner_task():
                     analysis_result = await signal_engine.analyze_coin(coin_key, coin_data['binance_symbol'])
                     current_analysis[coin_key] = analysis_result
                     
-                    # تسجيل تفاصيل الإشارات
-                    if analysis_result.get('success') and analysis_result.get('signal') != 'none':
-                        enhancement = analysis_result.get('enhancement_details', {})
-                        net_enhancement = enhancement.get('net_enhancement', 0)
-                        original_conf = analysis_result.get('original_confidence', 0)
-                        final_conf = analysis_result.get('confidence', 0)
+                    # ✅ إرسال الإشارة إذا كانت قوية بما يكفي
+                    if (analysis_result.get('success') and 
+                        analysis_result.get('signal') != 'none' and 
+                        analysis_result.get('confidence', 0) >= CONFIDENCE_THRESHOLD_SINGLE):
                         
-                        logger.info(f"🎯 {coin_key} - {analysis_result['signal']} {final_conf}% (الأصل: {original_conf}% ↗️ {net_enhancement:+d})")
+                        # تحضير إشارة التداول
+                        signal_data = await prepare_trade_signal(
+                            coin_key, 
+                            coin_data, 
+                            TIMEFRAME,
+                            analysis_result,
+                            analysis_result.get('current_price', 0)
+                        )
                         
+                        if signal_data:
+                            # إرسال الإشارة إلى البوت المنفذ
+                            success = await executor_client.send_trade_signal(signal_data)
+                            if success:
+                                signals_sent += 1
+                                enhancement = analysis_result.get('enhancement_details', {})
+                                net_enhancement = enhancement.get('net_enhancement', 0)
+                                logger.info(f"✅ تم إرسال إشارة {analysis_result['signal']} لـ {coin_key} ({analysis_result['confidence']}%) ↗️{net_enhancement:+d} إلى البوت المنفذ")
+                            
+                            await asyncio.sleep(2)  # تجنب rate limiting
+                    
                 except Exception as e:
                     logger.error(f"❌ خطأ في معالجة {coin_key}: {e}")
                     await asyncio.sleep(2)
                     continue
             
             recent_analysis = current_analysis
-            logger.info(f"💾 تم حفظ تحليل {len(current_analysis)} عملة")
+            logger.info(f"💾 تم حفظ تحليل {len(current_analysis)} عملة، تم إرسال {signals_sent} إشارة")
             
             # إرسال التقارير التحليلية
             current_time = time.time()
@@ -1595,6 +1684,7 @@ async def advanced_market_scanner_task():
                 last_analysis_report_time = current_time
             
             system_stats["total_scans"] += 1
+            system_stats["signals_sent"] += signals_sent
             
             logger.info(f"✅ اكتملت دورة المسح - انتظار {SCAN_INTERVAL} ثانية للمسح التالي...")
             await asyncio.sleep(SCAN_INTERVAL)
@@ -1603,7 +1693,7 @@ async def advanced_market_scanner_task():
             logger.error(f"❌ خطأ في المهمة الرئيسية: {e}")
             logger.info("⏳ انتظار 60 ثانية قبل إعادة المحاولة...")
             await asyncio.sleep(60)
-
+            
 async def heartbeat_task():
     """مهمة إرسال النبضات الدورية"""
     global recent_analysis
