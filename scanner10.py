@@ -1617,8 +1617,17 @@ async def prepare_trade_signal(coin_key: str, coin_data: Dict, timeframe: str,
                              analysis: Dict, current_price: float) -> Optional[Dict[str, Any]]:
     """تحضير بيانات إشارة التداول للبوت المنفذ"""
     try:
-        signal_type = analysis["signal"]  # 'BUY' or 'SELL'
-        confidence = analysis["confidence"]
+        signal_type = analysis["signal"]
+        
+        # ✅ استخدام الثقة المصححة إذا وجدت، وإلا الثقة الأصلية
+        if 'corrected_confidence' in analysis:
+            confidence = analysis['corrected_confidence']
+            original_confidence = analysis.get('original_confidence', confidence)
+            correction = analysis.get('correction_applied', 0)
+        else:
+            confidence = analysis["confidence"]
+            original_confidence = confidence
+            correction = 0
         
         # تحضير بيانات الإشارة
         signal_data = {
@@ -1629,6 +1638,8 @@ async def prepare_trade_signal(coin_key: str, coin_data: Dict, timeframe: str,
             "timeframe": timeframe,
             "price": current_price,
             "confidence_score": confidence,
+            "original_confidence": original_confidence,  # ✅ حفظ القيمة الأصلية
+            "correction_applied": correction,  # ✅ تسجيل التصحيح
             "reason": " | ".join(analysis.get("reasons", [])),
             "analysis": analysis.get("analysis_details", {}),
             "strategies_analysis": analysis.get("strategies_analysis", {}),
@@ -1638,11 +1649,15 @@ async def prepare_trade_signal(coin_key: str, coin_data: Dict, timeframe: str,
             "enhancement_details": analysis.get("enhancement_details", {})
         }
         
+        if correction != 0:
+            logger.info(f"🎯 إرسال إشارة مصححة لـ {coin_key}: {original_confidence}% → {confidence}% ({correction:+d})")
+        
         return signal_data
         
     except Exception as e:
         logger.error(f"❌ خطأ في تحضير إشارة التداول لـ {coin_key}: {e}")
         return None
+        
 # =============================================================================
 # المهام الأساسية مع نظام التقارير التحليلية
 # =============================================================================
@@ -1670,28 +1685,40 @@ async def advanced_market_scanner_task():
                     analysis_result = await signal_engine.analyze_coin(coin_key, coin_data['binance_symbol'])
                     current_analysis[coin_key] = analysis_result
                     
-                    # ✅ إرسال الإشارة إذا كانت قوية بما يكفي
+                    # ✅ فحص إذا كانت الإشارة تتخطى العتبة الأصلية
                     if (analysis_result.get('success') and 
                         analysis_result.get('signal') != 'none' and 
                         analysis_result.get('confidence', 0) >= CONFIDENCE_THRESHOLD_SINGLE):
                         
-                        # تحضير إشارة التداول
+                        # 🔥 تطبيق التصحيح: تخفيض الثقة بمقدار 40 نقطة قبل الإرسال
+                        original_confidence = analysis_result.get('confidence', 0)
+                        corrected_confidence = max(10, original_confidence - 40)  # لا تقل عن 10%
+                        
+                        # تحديث نتيجة التحليل بالقيمة المصححة
+                        analysis_result_corrected = analysis_result.copy()
+                        analysis_result_corrected['confidence'] = corrected_confidence
+                        analysis_result_corrected['original_confidence'] = original_confidence
+                        analysis_result_corrected['correction_applied'] = -40
+                        
+                        logger.info(f"🎯 تصحيح الإشارة لـ {coin_key}: {original_confidence}% → {corrected_confidence}% (-40)")
+                        
+                        # تحضير إشارة التداول بالقيمة المصححة
                         signal_data = await prepare_trade_signal(
                             coin_key, 
                             coin_data, 
                             TIMEFRAME,
-                            analysis_result,
+                            analysis_result_corrected,  # ✅ استخدام التحليل المصحح
                             analysis_result.get('current_price', 0)
                         )
                         
                         if signal_data:
-                            # إرسال الإشارة إلى البوت المنفذ
+                            # إرسال الإشارة المصححة إلى البوت المنفذ
                             success = await executor_client.send_trade_signal(signal_data)
                             if success:
                                 signals_sent += 1
                                 enhancement = analysis_result.get('enhancement_details', {})
                                 net_enhancement = enhancement.get('net_enhancement', 0)
-                                logger.info(f"✅ تم إرسال إشارة {analysis_result['signal']} لـ {coin_key} ({analysis_result['confidence']}%) ↗️{net_enhancement:+d} إلى البوت المنفذ")
+                                logger.info(f"✅ تم إرسال إشارة مصححة {analysis_result['signal']} لـ {coin_key} ({corrected_confidence}% ↗️{net_enhancement:+d}) إلى البوت المنفذ")
                             
                             await asyncio.sleep(2)  # تجنب rate limiting
                     
@@ -1701,7 +1728,7 @@ async def advanced_market_scanner_task():
                     continue
             
             recent_analysis = current_analysis
-            logger.info(f"💾 تم حفظ تحليل {len(current_analysis)} عملة، تم إرسال {signals_sent} إشارة")
+            logger.info(f"💾 تم حفظ تحليل {len(current_analysis)} عملة، تم إرسال {signals_sent} إشارة مصححة")
             
             # إرسال التقارير التحليلية
             current_time = time.time()
@@ -1720,7 +1747,7 @@ async def advanced_market_scanner_task():
         except Exception as e:
             logger.error(f"❌ خطأ في المهمة الرئيسية: {e}")
             logger.info("⏳ انتظار 60 ثانية قبل إعادة المحاولة...")
-            await asyncio.sleep(60)
+            await asyncio.sleep(60)     
             
 async def heartbeat_task():
     """مهمة إرسال النبضات الدورية"""
