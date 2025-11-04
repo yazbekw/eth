@@ -31,8 +31,8 @@ COINEX_SECRET_KEY = os.getenv("COINEX_SECRET_KEY", "")
 # إعدادات التداول
 SCAN_INTERVAL = 900  # 15 دقيقة بين كل فحص
 CONFIDENCE_THRESHOLD_SINGLE = 80  # عتبة الإشارة الواحدة
-CONFIDENCE_THRESHOLD_MULTIPLE = 61  # عتبة الإشارات المتعددة
-MIN_STRATEGY_CONFIDENCE = 25  # أقل ثقة للاستراتيجيات المحتسبة
+CONFIDENCE_THRESHOLD_MULTIPLE = 75  # عتبة الإشارات المتعددة
+MIN_STRATEGY_CONFIDENCE = 30  # أقل ثقة للاستراتيجيات المحتسبة
 
 # العملات المدعومة
 SUPPORTED_COINS = {
