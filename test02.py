@@ -4,7 +4,7 @@ import requests
 import time
 from datetime import datetime, timedelta
 import os
-from typing import Dict, List, Optional, Tuple
+from typing import Dict, List, Optional, Tuple, Any
 import logging
 import json
 import matplotlib.pyplot as plt
@@ -50,7 +50,7 @@ logger = logging.getLogger("Volume_Divergence_Strategy")
 @dataclass
 class Trade:
     symbol: str
-    direction: str  # LONG or SHORT
+    direction: str  # BUY or SELL
     entry_price: float
     entry_time: datetime
     exit_price: float = None
@@ -171,8 +171,7 @@ class VolumeDivergenceStrategy:
         self.analysis_results = []
         self.telegram_notifier = telegram_notifier
     
-    @staticmethod
-    def calculate_divergence(prices: List[float], volumes: List[float], 
+    def calculate_divergence(self, prices: List[float], volumes: List[float], 
                            lookback_period: int = 20) -> Dict[str, Any]:
         """حساب الانزياح بين حركة السعر والحجم"""
         if len(prices) < lookback_period * 2:
@@ -672,7 +671,7 @@ class VolumeDivergenceStrategy:
         volume_analysis = {
             'high_volume_trades': len(trades_df[trades_df['volume_ratio'] > 2.0]),
             'avg_volume_ratio': trades_df['volume_ratio'].mean(),
-            'volume_correlation': trades_df['volume_ratio'].corr(trades_df['pnl'])
+            'volume_correlation': trades_df['volume_ratio'].corr(trades_df['pnl']) if len(trades_df) > 1 else 0
         }
         
         return BacktestResult(
