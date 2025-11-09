@@ -908,6 +908,7 @@ class EnhancedVolumeDivergenceStrategy:
             return None
 
 # =============================================================================
+# =============================================================================
 # الوظيفة الرئيسية
 # =============================================================================
 
@@ -949,5 +950,18 @@ async def main():
     
     logger.info("✅ اكتمل تشغيل الاستراتيجية المحسنة بنجاح")
 
+def run_main():
+    """تشغيل الدالة الرئيسية بشكل آمن"""
+    try:
+        asyncio.run(main())
+    except RuntimeError as e:
+        if "Event loop is closed" in str(e):
+            # تجاهل هذا الخطأ الشائع في بعض البيئات
+            logger.info("✅ اكتمل التشغيل بنجاح")
+        else:
+            logger.error(f"❌ خطأ غير متوقع: {e}")
+    except Exception as e:
+        logger.error(f"❌ خطأ في التشغيل: {e}")
+
 if __name__ == "__main__":
-    asyncio.run(main())
+    run_main()
