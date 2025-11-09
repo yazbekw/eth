@@ -46,7 +46,7 @@ logging.basicConfig(
     format='%(asctime)s - %(levelname)s - %(message)s',
     datefmt='%Y-%m-%d %H:%M:%S'
 )
-logger = logging.getLogger("Enhanced_Sell_Strategy_v6")
+logger = logging.getLogger("Enhanced_Sell_Strategy_v6_Fixed")
 
 # =============================================================================
 # هياكل البيانات المحسنة
@@ -178,14 +178,14 @@ class DataFetcher:
             return pd.DataFrame()
 
 # =============================================================================
-# استراتيجية الانزياح الحجمي المحسنة للبيع - إصدار أكثر مرونة
+# استراتيجية الانزياح الحجمي المحسنة للبيع - إصدار أكثر مرونة ومصحح
 # =============================================================================
 
 class EnhancedSellStrategy:
-    """استراتيجية محسنة تركز على تحسين أداء البيع - إصدار أكثر مرونة"""
+    """استراتيجية محسنة تركز على تحسين أداء البيع - إصدار أكثر مرونة ومصحح"""
     
     def __init__(self, telegram_notifier: TelegramNotifier = None):
-        self.name = "enhanced_sell_strategy_v6"
+        self.name = "enhanced_sell_strategy_v6_fixed"
         self.trades: List[Trade] = []
         self.balance = INITIAL_BALANCE
         self.current_balance = INITIAL_BALANCE
@@ -202,267 +202,335 @@ class EnhancedSellStrategy:
             'ultra_sell': {'trades': 0, 'wins': 0, 'total_pnl': 0}
         }
     
+    def safe_get_price(self, prices: List[float], index: int) -> float:
+        """الحصول على سعر بشكل آمن مع التحقق من النطاق"""
+        if len(prices) > abs(index):
+            return prices[index]
+        return prices[-1] if prices else 0
+    
+    def safe_get_volume(self, volumes: List[float], index: int) -> float:
+        """الحصول على حجم بشكل آمن مع التحقق من النطاق"""
+        if len(volumes) > abs(index):
+            return volumes[index]
+        return volumes[-1] if volumes else 0
+    
     def calculate_enhanced_sell_divergence(self, prices: List[float], volumes: List[float]) -> Dict[str, Any]:
-        """انزياح بيع محسن بشروط أكثر مرونة"""
-        if len(prices) < 40:
+        """انزياح بيع محسن بشروط أكثر مرونة وآمنة"""
+        if len(prices) < 50 or len(volumes) < 50:
             return {"divergence": "none", "strength": 0, "sell_category": "NONE"}
         
-        # تحليل متقدم للاتجاه الهبوطي
-        trend_5 = (prices[-1] - prices[-5]) / prices[-5]
-        trend_10 = (prices[-1] - prices[-10]) / prices[-10]
-        trend_20 = (prices[-1] - prices[-20]) / prices[-20]
-        trend_50 = (prices[-1] - prices[-50]) / prices[-50]
-        
-        # تحليل الحجم المتقدم للبيع
-        current_volume = volumes[-1]
-        avg_volume_10 = np.mean(volumes[-10:])
-        avg_volume_20 = np.mean(volumes[-20:])
-        avg_volume_50 = np.mean(volumes[-50:])
-        
-        volume_ratio_10 = current_volume / avg_volume_10
-        volume_ratio_20 = current_volume / avg_volume_20
-        volume_ratio_50 = current_volume / avg_volume_50
-        
-        # قوة الاتجاه الهبوطي
-        bearish_strength = abs(min(0, trend_10, trend_20, trend_50))
-        
-        # 1. بيع متميز (شروط معتدلة)
-        if (trend_20 > 0.05 and                    # صعود جيد سابق (مخفض من 0.08)
-            trend_5 < -0.02 and                    # انعكاس هبوطي (مخفض من 0.03)
-            volume_ratio_20 > 2.0 and              # حجم عالي (مخفض من 2.5)
-            volume_ratio_50 > 1.5 and              # تأكيد حجم طويل المدى (مخفض من 2.0)
-            current_volume > np.percentile(volumes[-100:], 80) and  # حجم في أعلى 20% (مخفض من 90%)
-            bearish_strength > 0.03):              # قوة هبوط (مخفض من 0.05)
+        try:
+            # تحليل متقدم للاتجاه الهبوطي - باستخدام الدوال الآمنة
+            trend_5 = (self.safe_get_price(prices, -1) - self.safe_get_price(prices, -5)) / self.safe_get_price(prices, -5)
+            trend_10 = (self.safe_get_price(prices, -1) - self.safe_get_price(prices, -10)) / self.safe_get_price(prices, -10)
+            trend_20 = (self.safe_get_price(prices, -1) - self.safe_get_price(prices, -20)) / self.safe_get_price(prices, -20)
+            trend_50 = (self.safe_get_price(prices, -1) - self.safe_get_price(prices, -50)) / self.safe_get_price(prices, -50)
             
-            strength = min(95, int(
-                bearish_strength * 2000 + 
-                (volume_ratio_20 - 1) * 35 +
-                abs(trend_5) * 1200
-            ))
-            return {"divergence": "bearish_reversal", "strength": strength, "sell_category": "ULTRA"}
-        
-        # 2. بيع عالي الجودة
-        elif (trend_20 > 0.03 and                   # صعود معتدل سابق (مخفض من 0.05)
-              trend_10 < -0.015 and                 # بداية هبوط (مخفض من 0.02)
-              volume_ratio_20 > 1.8 and             # حجم جيد (مخفض من 2.2)
-              volume_ratio_10 > 2.0 and             # تسارع حجمي (مخفض من 2.5)
-              current_volume > np.percentile(volumes[-100:], 75) and  # حجم في أعلى 25% (مخفض من 85%)
-              bearish_strength > 0.02):
+            # تحليل الحجم المتقدم للبيع
+            current_volume = self.safe_get_volume(volumes, -1)
+            avg_volume_10 = np.mean(volumes[-10:]) if len(volumes) >= 10 else current_volume
+            avg_volume_20 = np.mean(volumes[-20:]) if len(volumes) >= 20 else current_volume
+            avg_volume_50 = np.mean(volumes[-50:]) if len(volumes) >= 50 else current_volume
             
-            strength = min(85, int(
-                bearish_strength * 1500 + 
-                (volume_ratio_20 - 1) * 30 +
-                abs(trend_10) * 1000
-            ))
-            return {"divergence": "bearish_reversal", "strength": strength, "sell_category": "PREMIUM"}
-        
-        # 3. بيع قياسي (شروط أكثر مرونة)
-        elif (trend_20 > 0.02 and                   # صعود طفيف سابق (مخفض من 0.03)
-              trend_5 < -0.01 and                   # انعكاس هبوطي طفيف (مخفض من 0.015)
-              volume_ratio_20 > 1.5 and             # حجم معتدل (مخفض من 1.8)
-              volume_ratio_10 > 1.8 and             # تسارع حجمي (مخفض من 2.0)
-              current_volume > np.percentile(volumes[-100:], 70) and  # حجم في أعلى 30% (مخفض من 75%)
-              bearish_strength > 0.01):
+            volume_ratio_10 = current_volume / avg_volume_10 if avg_volume_10 > 0 else 1
+            volume_ratio_20 = current_volume / avg_volume_20 if avg_volume_20 > 0 else 1
+            volume_ratio_50 = current_volume / avg_volume_50 if avg_volume_50 > 0 else 1
             
-            strength = min(75, int(
-                bearish_strength * 1200 + 
-                (volume_ratio_20 - 1) * 25 +
-                abs(trend_5) * 800
-            ))
-            return {"divergence": "bearish_reversal", "strength": strength, "sell_category": "STANDARD"}
-        
-        # 4. بيع حجمي بسيط (إضافة جديدة - شروط مرنة جداً)
-        elif (trend_10 < -0.02 and                  # هبوط حديث
-              volume_ratio_20 > 2.5 and             # حجم عالي جداً
-              current_volume > np.percentile(volumes[-100:], 85) and  # حجم في أعلى 15%
-              volume_ratio_10 > volume_ratio_20):   # تسارع حجمي
+            # قوة الاتجاه الهبوطي
+            bearish_strength = abs(min(0, trend_10, trend_20, trend_50))
             
-            strength = min(70, int(
-                abs(trend_10) * 1500 + 
-                (volume_ratio_20 - 1) * 20
-            ))
-            return {"divergence": "volume_sell", "strength": strength, "sell_category": "STANDARD"}
-        
-        return {"divergence": "none", "strength": 0, "sell_category": "NONE"}
+            # 1. بيع متميز (شروط معتدلة)
+            if (trend_20 > 0.05 and                    # صعود جيد سابق (مخفض من 0.08)
+                trend_5 < -0.02 and                    # انعكاس هبوطي (مخفض من 0.03)
+                volume_ratio_20 > 2.0 and              # حجم عالي (مخفض من 2.5)
+                volume_ratio_50 > 1.5 and              # تأكيد حجم طويل المدى (مخفض من 2.0)
+                current_volume > np.percentile(volumes[-100:], 80) and  # حجم في أعلى 20% (مخفض من 90%)
+                bearish_strength > 0.03):              # قوة هبوط (مخفض من 0.05)
+                
+                strength = min(95, int(
+                    bearish_strength * 2000 + 
+                    (volume_ratio_20 - 1) * 35 +
+                    abs(trend_5) * 1200
+                ))
+                return {"divergence": "bearish_reversal", "strength": strength, "sell_category": "ULTRA"}
+            
+            # 2. بيع عالي الجودة
+            elif (trend_20 > 0.03 and                   # صعود معتدل سابق (مخفض من 0.05)
+                  trend_10 < -0.015 and                 # بداية هبوط (مخفض من 0.02)
+                  volume_ratio_20 > 1.8 and             # حجم جيد (مخفض من 2.2)
+                  volume_ratio_10 > 2.0 and             # تسارع حجمي (مخفض من 2.5)
+                  current_volume > np.percentile(volumes[-100:], 75) and  # حجم في أعلى 25% (مخفض من 85%)
+                  bearish_strength > 0.02):
+                
+                strength = min(85, int(
+                    bearish_strength * 1500 + 
+                    (volume_ratio_20 - 1) * 30 +
+                    abs(trend_10) * 1000
+                ))
+                return {"divergence": "bearish_reversal", "strength": strength, "sell_category": "PREMIUM"}
+            
+            # 3. بيع قياسي (شروط أكثر مرونة)
+            elif (trend_20 > 0.02 and                   # صعود طفيف سابق (مخفض من 0.03)
+                  trend_5 < -0.01 and                   # انعكاس هبوطي طفيف (مخفض من 0.015)
+                  volume_ratio_20 > 1.5 and             # حجم معتدل (مخفض من 1.8)
+                  volume_ratio_10 > 1.8 and             # تسارع حجمي (مخفض من 2.0)
+                  current_volume > np.percentile(volumes[-100:], 70) and  # حجم في أعلى 30% (مخفض من 75%)
+                  bearish_strength > 0.01):
+                
+                strength = min(75, int(
+                    bearish_strength * 1200 + 
+                    (volume_ratio_20 - 1) * 25 +
+                    abs(trend_5) * 800
+                ))
+                return {"divergence": "bearish_reversal", "strength": strength, "sell_category": "STANDARD"}
+            
+            # 4. بيع حجمي بسيط (إضافة جديدة - شروط مرنة جداً)
+            elif (trend_10 < -0.02 and                  # هبوط حديث
+                  volume_ratio_20 > 2.5 and             # حجم عالي جداً
+                  current_volume > np.percentile(volumes[-100:], 85) and  # حجم في أعلى 15%
+                  volume_ratio_10 > volume_ratio_20):   # تسارع حجمي
+                
+                strength = min(70, int(
+                    abs(trend_10) * 1500 + 
+                    (volume_ratio_20 - 1) * 20
+                ))
+                return {"divergence": "volume_sell", "strength": strength, "sell_category": "STANDARD"}
+            
+            return {"divergence": "none", "strength": 0, "sell_category": "NONE"}
+            
+        except Exception as e:
+            logger.error(f"❌ خطأ في حساب الانزياح البيعي: {e}")
+            return {"divergence": "none", "strength": 0, "sell_category": "NONE"}
     
     def calculate_buy_divergence(self, prices: List[float], volumes: List[float]) -> Dict[str, Any]:
-        """انزياح شراء (محافظ على الأداء الجيد)"""
-        if len(prices) < 40:
+        """انزياح شراء (محافظ على الأداء الجيد) - إصدار آمن"""
+        if len(prices) < 40 or len(volumes) < 40:
             return {"divergence": "none", "strength": 0}
         
-        trend_20 = (prices[-1] - prices[-20]) / prices[-20]
-        current_volume = volumes[-1]
-        avg_volume_20 = np.mean(volumes[-20:])
-        volume_ratio_20 = current_volume / avg_volume_20
-        
-        if (trend_20 < -0.02 and                    # مخفض من 0.03
-            volume_ratio_20 > 1.8 and               # مخفض من 2.0
-            current_volume > np.percentile(volumes[-100:], 75)):  # مخفض من 80%
+        try:
+            trend_20 = (self.safe_get_price(prices, -1) - self.safe_get_price(prices, -20)) / self.safe_get_price(prices, -20)
+            current_volume = self.safe_get_volume(volumes, -1)
+            avg_volume_20 = np.mean(volumes[-20:]) if len(volumes) >= 20 else current_volume
+            volume_ratio_20 = current_volume / avg_volume_20 if avg_volume_20 > 0 else 1
             
-            strength = min(80, int(abs(trend_20) * 1500 + (volume_ratio_20 - 1) * 30))
-            return {"divergence": "bullish_reversal", "strength": strength}
-        
-        # إضافة شراء حجمي بسيط
-        elif (trend_20 < -0.01 and
-              volume_ratio_20 > 2.5 and
-              current_volume > np.percentile(volumes[-100:], 85)):
+            if (trend_20 < -0.02 and                    # مخفض من 0.03
+                volume_ratio_20 > 1.8 and               # مخفض من 2.0
+                current_volume > np.percentile(volumes[-100:], 75)):  # مخفض من 80%
+                
+                strength = min(80, int(abs(trend_20) * 1500 + (volume_ratio_20 - 1) * 30))
+                return {"divergence": "bullish_reversal", "strength": strength}
             
-            strength = min(75, int(abs(trend_20) * 1200 + (volume_ratio_20 - 1) * 25))
-            return {"divergence": "volume_buy", "strength": strength}
-        
-        return {"divergence": "none", "strength": 0}
+            # إضافة شراء حجمي بسيط
+            elif (trend_20 < -0.01 and
+                  volume_ratio_20 > 2.5 and
+                  current_volume > np.percentile(volumes[-100:], 85)):
+                
+                strength = min(75, int(abs(trend_20) * 1200 + (volume_ratio_20 - 1) * 25))
+                return {"divergence": "volume_buy", "strength": strength}
+            
+            return {"divergence": "none", "strength": 0}
+            
+        except Exception as e:
+            logger.error(f"❌ خطأ في حساب الانزياح الشرائي: {e}")
+            return {"divergence": "none", "strength": 0}
     
     def calculate_trend_strength(self, prices: List[float]) -> float:
-        """حساب قوة الاتجاه"""
+        """حساب قوة الاتجاه - إصدار آمن"""
         if len(prices) < 20:
             return 0.5
         
-        short_trend = (prices[-1] - prices[-5]) / prices[-5]
-        medium_trend = (prices[-1] - prices[-10]) / prices[-10]
-        long_trend = (prices[-1] - prices[-20]) / prices[-20]
-        
-        # متوسط مرجح للاتجاهات
-        trend_strength = (abs(short_trend) * 0.4 + abs(medium_trend) * 0.3 + abs(long_trend) * 0.3)
-        direction = -1 if (short_trend + medium_trend + long_trend) < 0 else 1
-        
-        return trend_strength * direction
+        try:
+            short_trend = (self.safe_get_price(prices, -1) - self.safe_get_price(prices, -5)) / self.safe_get_price(prices, -5)
+            medium_trend = (self.safe_get_price(prices, -1) - self.safe_get_price(prices, -10)) / self.safe_get_price(prices, -10)
+            long_trend = (self.safe_get_price(prices, -1) - self.safe_get_price(prices, -20)) / self.safe_get_price(prices, -20)
+            
+            # متوسط مرجح للاتجاهات
+            trend_strength = (abs(short_trend) * 0.4 + abs(medium_trend) * 0.3 + abs(long_trend) * 0.3)
+            direction = -1 if (short_trend + medium_trend + long_trend) < 0 else 1
+            
+            return trend_strength * direction
+            
+        except Exception as e:
+            logger.error(f"❌ خطأ في حساب قوة الاتجاه: {e}")
+            return 0.5
     
     def calculate_volume_surge(self, volumes: List[float]) -> float:
-        """حساب قوة طفرة الحجم"""
+        """حساب قوة طفرة الحجم - إصدار آمن"""
         if len(volumes) < 10:
             return 0
         
-        current_volume = volumes[-1]
-        avg_volume_10 = np.mean(volumes[-10:])
-        volume_surge = (current_volume - avg_volume_10) / avg_volume_10
-        
-        return max(0, volume_surge)
+        try:
+            current_volume = self.safe_get_volume(volumes, -1)
+            avg_volume_10 = np.mean(volumes[-10:]) if len(volumes) >= 10 else current_volume
+            volume_surge = (current_volume - avg_volume_10) / avg_volume_10 if avg_volume_10 > 0 else 0
+            
+            return max(0, volume_surge)
+            
+        except Exception as e:
+            logger.error(f"❌ خطأ في حساب طفرة الحجم: {e}")
+            return 0
     
     def calculate_sell_quality_score(self, df_row: pd.Series, divergence_data: Dict, 
                                    df: pd.DataFrame, current_index: int) -> float:
-        """حساب درجة الجودة للصفقات البيعية - أكثر مرونة"""
+        """حساب درجة الجودة للصفقات البيعية - أكثر مرونة وآمنة"""
         quality_score = 0
         
-        # 1. جودة الحجم (30 نقطة)
-        volume_score = min(30, (df_row['volume_ratio_20'] - 1) * 15)
-        quality_score += volume_score
+        try:
+            # 1. جودة الحجم (30 نقطة)
+            volume_ratio = df_row.get('volume_ratio_20', 1)
+            volume_score = min(30, (volume_ratio - 1) * 15)
+            quality_score += volume_score
+            
+            # 2. قوة الانزياح (25 نقطة)
+            divergence_strength = min(25, divergence_data.get("strength", 0) / 4)
+            quality_score += divergence_strength
+            
+            # 3. قوة الاتجاه الهبوطي (20 نقطة) - مخفضة
+            if current_index >= 20:
+                prices = df['close'].iloc[:current_index+1].tolist()
+                trend_strength = abs(self.calculate_trend_strength(prices))
+                if trend_strength < 0:  # اتجاه هبوطي
+                    trend_score = min(20, abs(trend_strength) * 400)  # مخفضة
+                    quality_score += trend_score
+            
+            # 4. طفرة الحجم (15 نقطة) - مخفضة
+            if current_index >= 10:
+                volumes = df['volume'].iloc[:current_index+1].tolist()
+                volume_surge = self.calculate_volume_surge(volumes)
+                surge_score = min(15, volume_surge * 75)  # مخفضة
+                quality_score += surge_score
+            
+            # 5. استقرار السعر (10 نقطة) - إضافة جديدة
+            if current_index >= 10:
+                try:
+                    price_volatility = df['close'].iloc[current_index-10:current_index].std()
+                    overall_volatility = df['close'].std()
+                    if price_volatility < overall_volatility * 0.9:
+                        quality_score += 10
+                except:
+                    pass  # تجاهل الخطأ في حساب التقلبات
         
-        # 2. قوة الانزياح (25 نقطة)
-        divergence_strength = min(25, divergence_data["strength"] / 4)
-        quality_score += divergence_strength
-        
-        # 3. قوة الاتجاه الهبوطي (20 نقطة) - مخفضة
-        if current_index >= 20:
-            prices = df['close'].iloc[:current_index+1].tolist()
-            trend_strength = abs(self.calculate_trend_strength(prices))
-            if trend_strength < 0:  # اتجاه هبوطي
-                trend_score = min(20, abs(trend_strength) * 400)  # مخفضة
-                quality_score += trend_score
-        
-        # 4. طفرة الحجم (15 نقطة) - مخفضة
-        if current_index >= 10:
-            volumes = df['volume'].iloc[:current_index+1].tolist()
-            volume_surge = self.calculate_volume_surge(volumes)
-            surge_score = min(15, volume_surge * 75)  # مخفضة
-            quality_score += surge_score
-        
-        # 5. استقرار السعر (10 نقطة) - إضافة جديدة
-        if current_index >= 10:
-            price_volatility = df['close'].iloc[current_index-10:current_index].std()
-            if price_volatility < df['close'].std() * 0.9:
-                quality_score += 10
+        except Exception as e:
+            logger.error(f"❌ خطأ في حساب جودة البيع: {e}")
         
         # مكافأة للبيع المتميز
-        if divergence_data["sell_category"] == "ULTRA":
-            quality_score += 10  # مخفضة
-        elif divergence_data["sell_category"] == "PREMIUM":
-            quality_score += 7   # مخفضة
+        try:
+            sell_category = divergence_data.get("sell_category", "NONE")
+            if sell_category == "ULTRA":
+                quality_score += 10  # مخفضة
+            elif sell_category == "PREMIUM":
+                quality_score += 7   # مخفضة
+        except:
+            pass
         
         return min(100, quality_score)
     
     def calculate_buy_quality_score(self, df_row: pd.Series, divergence_data: Dict, 
                                   df: pd.DataFrame, current_index: int) -> float:
-        """حساب درجة الجودة للصفقات الشرائية"""
+        """حساب درجة الجودة للصفقات الشرائية - إصدار آمن"""
         quality_score = 0
         
-        volume_score = min(35, (df_row['volume_ratio_20'] - 1) * 17)
-        quality_score += volume_score
+        try:
+            volume_ratio = df_row.get('volume_ratio_20', 1)
+            volume_score = min(35, (volume_ratio - 1) * 17)
+            quality_score += volume_score
+            
+            divergence_strength = min(25, divergence_data.get("strength", 0) / 4)
+            quality_score += divergence_strength
+            
+            if current_index >= 15:
+                try:
+                    volume_volatility = df['volume'].iloc[current_index-15:current_index].std()
+                    current_volatility = df['volume'].iloc[current_index-5:current_index].std() if current_index >= 5 else volume_volatility
+                    if current_volatility < volume_volatility * 0.8:
+                        quality_score += 20
+                except:
+                    pass
         
-        divergence_strength = min(25, divergence_data["strength"] / 4)
-        quality_score += divergence_strength
-        
-        if current_index >= 15:
-            volume_volatility = df['volume'].iloc[current_index-15:current_index].std()
-            current_volatility = df['volume'].iloc[current_index-5:current_index].std() if current_index >= 5 else volume_volatility
-            if current_volatility < volume_volatility * 0.8:
-                quality_score += 20
+        except Exception as e:
+            logger.error(f"❌ خطأ في حساب جودة الشراء: {e}")
         
         return min(100, quality_score)
     
     def enhanced_sell_confidence_system(self, divergence_data: Dict, quality_score: float) -> float:
         """نظام ثقة محسن للبيع - أكثر مرونة"""
         
-        base_confidence = divergence_data["strength"]
-        
-        # مضاعفات حسب فئة البيع
-        category_multipliers = {
-            "ULTRA": 1.3,      # مخفضة
-            "PREMIUM": 1.15,   # مخفضة  
-            "STANDARD": 1.0,
-            "NONE": 0.8
-        }
-        
-        multiplier = category_multipliers.get(divergence_data["sell_category"], 1.0)
-        adjusted_confidence = base_confidence * multiplier
-        
-        # تعزيز حسب جودة الإشارة
-        quality_boost = quality_score / 100
-        adjusted_confidence *= (1 + quality_boost * 0.5)  # مخفضة
-        
-        # عقوبة مخففة للجودة المنخفضة
-        if quality_score < 60:  # مخفضة من 70
-            adjusted_confidence *= 0.8  # مخففة
-        
-        return min(95, adjusted_confidence)
+        try:
+            base_confidence = divergence_data.get("strength", 0)
+            
+            # مضاعفات حسب فئة البيع
+            category_multipliers = {
+                "ULTRA": 1.3,      # مخفضة
+                "PREMIUM": 1.15,   # مخفضة  
+                "STANDARD": 1.0,
+                "NONE": 0.8
+            }
+            
+            multiplier = category_multipliers.get(divergence_data.get("sell_category", "NONE"), 1.0)
+            adjusted_confidence = base_confidence * multiplier
+            
+            # تعزيز حسب جودة الإشارة
+            quality_boost = quality_score / 100
+            adjusted_confidence *= (1 + quality_boost * 0.5)  # مخفضة
+            
+            # عقوبة مخففة للجودة المنخفضة
+            if quality_score < 60:  # مخفضة من 70
+                adjusted_confidence *= 0.8  # مخففة
+            
+            return min(95, adjusted_confidence)
+            
+        except Exception as e:
+            logger.error(f"❌ خطأ في نظام الثقة: {e}")
+            return 0
     
     def dynamic_sell_risk_management(self, sell_category: str, quality_score: float) -> Tuple[float, float]:
         """إدارة مخاطرة ديناميكية للبيع - أكثر توازناً"""
         
-        base_sl = STOP_LOSS_PERCENT
-        base_tp = TAKE_PROFIT_PERCENT
-        
-        # إعدادات أكثر توازناً للبيع
-        risk_adjustments = {
-            "ULTRA": (0.6, 3.5),    # أكثر توازناً
-            "PREMIUM": (0.7, 3.0),  # أكثر توازناً
-            "STANDARD": (0.8, 2.5)  # أكثر توازناً
-        }
-        
-        sl_multiplier, tp_multiplier = risk_adjustments.get(sell_category, (1.0, 1.0))
-        
-        # تعديل حسب الجودة
-        quality_factor = quality_score / 100
-        sl_multiplier *= (1.0 - quality_factor * 0.2)  # أكثر توازناً
-        tp_multiplier *= (0.9 + quality_factor * 0.3)  # أكثر توازناً
-        
-        return base_sl * sl_multiplier, base_tp * tp_multiplier
+        try:
+            base_sl = STOP_LOSS_PERCENT
+            base_tp = TAKE_PROFIT_PERCENT
+            
+            # إعدادات أكثر توازناً للبيع
+            risk_adjustments = {
+                "ULTRA": (0.6, 3.5),    # أكثر توازناً
+                "PREMIUM": (0.7, 3.0),  # أكثر توازناً
+                "STANDARD": (0.8, 2.5)  # أكثر توازناً
+            }
+            
+            sl_multiplier, tp_multiplier = risk_adjustments.get(sell_category, (1.0, 1.0))
+            
+            # تعديل حسب الجودة
+            quality_factor = quality_score / 100
+            sl_multiplier *= (1.0 - quality_factor * 0.2)  # أكثر توازناً
+            tp_multiplier *= (0.9 + quality_factor * 0.3)  # أكثر توازناً
+            
+            return base_sl * sl_multiplier, base_tp * tp_multiplier
+            
+        except Exception as e:
+            logger.error(f"❌ خطأ في إدارة المخاطرة: {e}")
+            return STOP_LOSS_PERCENT, TAKE_PROFIT_PERCENT
     
     def calculate_volume_indicators(self, df: pd.DataFrame) -> pd.DataFrame:
-        """حساب مؤشرات الحجم"""
-        df['volume_ma_5'] = df['volume'].rolling(5).mean()
-        df['volume_ma_10'] = df['volume'].rolling(10).mean()
-        df['volume_ma_20'] = df['volume'].rolling(20).mean()
-        df['volume_ma_50'] = df['volume'].rolling(50).mean()
-        
-        df['volume_ratio_5'] = df['volume'] / df['volume_ma_5']
-        df['volume_ratio_10'] = df['volume'] / df['volume_ma_10']
-        df['volume_ratio_20'] = df['volume'] / df['volume_ma_20']
-        df['volume_ratio_50'] = df['volume'] / df['volume_ma_50']
-        
-        return df
+        """حساب مؤشرات الحجم - إصدار آمن"""
+        try:
+            df['volume_ma_5'] = df['volume'].rolling(5, min_periods=1).mean()
+            df['volume_ma_10'] = df['volume'].rolling(10, min_periods=1).mean()
+            df['volume_ma_20'] = df['volume'].rolling(20, min_periods=1).mean()
+            df['volume_ma_50'] = df['volume'].rolling(50, min_periods=1).mean()
+            
+            df['volume_ratio_5'] = df['volume'] / df['volume_ma_5'].replace(0, 1)
+            df['volume_ratio_10'] = df['volume'] / df['volume_ma_10'].replace(0, 1)
+            df['volume_ratio_20'] = df['volume'] / df['volume_ma_20'].replace(0, 1)
+            df['volume_ratio_50'] = df['volume'] / df['volume_ma_50'].replace(0, 1)
+            
+            return df
+            
+        except Exception as e:
+            logger.error(f"❌ خطأ في حساب مؤشرات الحجم: {e}")
+            return df
     
     def generate_enhanced_signals(self, df: pd.DataFrame) -> pd.DataFrame:
-        """توليد إشارات محسنة مع تركيز على البيع - أكثر مرونة"""
+        """توليد إشارات محسنة مع تركيز على البيع - أكثر مرونة وآمنة"""
     
         buy_signals = []
         sell_signals = []
@@ -475,7 +543,78 @@ class EnhancedSellStrategy:
         volume_surges = []
     
         for i in range(len(df)):
-            if i < 40:  # مخفضة من 60
+            try:
+                if i < 40:  # مخفضة من 60
+                    buy_signals.append('none')
+                    sell_signals.append('none')
+                    buy_confidence_scores.append(0)
+                    sell_confidence_scores.append(0)
+                    buy_quality_scores.append(0)
+                    sell_quality_scores.append(0)
+                    sell_categories.append('NONE')
+                    trend_strengths.append(0)
+                    volume_surges.append(0)
+                    continue
+            
+                # استخراج البيانات
+                prices = df['close'].iloc[:i+1].tolist()
+                volumes = df['volume'].iloc[:i+1].tolist()
+            
+                # إشارات البيع المحسنة
+                sell_divergence = self.calculate_enhanced_sell_divergence(prices, volumes)
+                buy_divergence = self.calculate_buy_divergence(prices, volumes)
+                
+                # حساب قوة الاتجاه وطفرة الحجم
+                trend_strength = self.calculate_trend_strength(prices)
+                volume_surge = self.calculate_volume_surge(volumes)
+                
+                trend_strengths.append(trend_strength)
+                volume_surges.append(volume_surge)
+            
+                # معالجة إشارات البيع - شروط أكثر مرونة
+                sell_signal = 'none'
+                sell_confidence = 0
+                sell_quality = 0
+                
+                if sell_divergence["divergence"] != "none":
+                    sell_quality = self.calculate_sell_quality_score(df.iloc[i], sell_divergence, df, i)
+                    sell_confidence = self.enhanced_sell_confidence_system(sell_divergence, sell_quality)
+                    
+                    # شروط البيع الأكثر مرونة
+                    if (sell_confidence >= SELL_CONFIDENCE_THRESHOLD and 
+                        sell_quality >= SELL_QUALITY_THRESHOLD):
+                        
+                        # شروط إضافية مرنة حسب الفئة
+                        if sell_divergence["sell_category"] == "ULTRA":
+                            sell_signal = "SELL"
+                        elif sell_divergence["sell_category"] == "PREMIUM" and sell_confidence >= SELL_PREMIUM_THRESHOLD:
+                            sell_signal = "SELL"
+                        elif sell_divergence["sell_category"] == "STANDARD" and sell_quality >= 65:  # مخفضة
+                            sell_signal = "SELL"
+                
+                # معالجة إشارات الشراء
+                buy_signal = 'none'
+                buy_confidence = 0
+                buy_quality = 0
+                
+                if buy_divergence["divergence"] != "none":
+                    buy_quality = self.calculate_buy_quality_score(df.iloc[i], buy_divergence, df, i)
+                    buy_confidence = buy_divergence["strength"]
+                    
+                    if (buy_confidence >= BUY_CONFIDENCE_THRESHOLD and 
+                        buy_quality >= 65):  # مخفضة
+                        buy_signal = "BUY"
+            
+                buy_signals.append(buy_signal)
+                sell_signals.append(sell_signal)
+                buy_confidence_scores.append(buy_confidence)
+                sell_confidence_scores.append(sell_confidence)
+                buy_quality_scores.append(buy_quality)
+                sell_quality_scores.append(sell_quality)
+                sell_categories.append(sell_divergence["sell_category"])
+                
+            except Exception as e:
+                logger.error(f"❌ خطأ في توليد الإشارات للمؤشر {i}: {e}")
                 buy_signals.append('none')
                 sell_signals.append('none')
                 buy_confidence_scores.append(0)
@@ -485,64 +624,6 @@ class EnhancedSellStrategy:
                 sell_categories.append('NONE')
                 trend_strengths.append(0)
                 volume_surges.append(0)
-                continue
-        
-            # استخراج البيانات
-            prices = df['close'].iloc[:i+1].tolist()
-            volumes = df['volume'].iloc[:i+1].tolist()
-        
-            # إشارات البيع المحسنة
-            sell_divergence = self.calculate_enhanced_sell_divergence(prices, volumes)
-            buy_divergence = self.calculate_buy_divergence(prices, volumes)
-            
-            # حساب قوة الاتجاه وطفرة الحجم
-            trend_strength = self.calculate_trend_strength(prices)
-            volume_surge = self.calculate_volume_surge(volumes)
-            
-            trend_strengths.append(trend_strength)
-            volume_surges.append(volume_surge)
-        
-            # معالجة إشارات البيع - شروط أكثر مرونة
-            sell_signal = 'none'
-            sell_confidence = 0
-            sell_quality = 0
-            
-            if sell_divergence["divergence"] != "none":
-                sell_quality = self.calculate_sell_quality_score(df.iloc[i], sell_divergence, df, i)
-                sell_confidence = self.enhanced_sell_confidence_system(sell_divergence, sell_quality)
-                
-                # شروط البيع الأكثر مرونة
-                if (sell_confidence >= SELL_CONFIDENCE_THRESHOLD and 
-                    sell_quality >= SELL_QUALITY_THRESHOLD):
-                    
-                    # شروط إضافية مرنة حسب الفئة
-                    if sell_divergence["sell_category"] == "ULTRA":
-                        sell_signal = "SELL"
-                    elif sell_divergence["sell_category"] == "PREMIUM" and sell_confidence >= SELL_PREMIUM_THRESHOLD:
-                        sell_signal = "SELL"
-                    elif sell_divergence["sell_category"] == "STANDARD" and sell_quality >= 65:  # مخفضة
-                        sell_signal = "SELL"
-            
-            # معالجة إشارات الشراء
-            buy_signal = 'none'
-            buy_confidence = 0
-            buy_quality = 0
-            
-            if buy_divergence["divergence"] != "none":
-                buy_quality = self.calculate_buy_quality_score(df.iloc[i], buy_divergence, df, i)
-                buy_confidence = buy_divergence["strength"]
-                
-                if (buy_confidence >= BUY_CONFIDENCE_THRESHOLD and 
-                    buy_quality >= 65):  # مخفضة
-                    buy_signal = "BUY"
-        
-            buy_signals.append(buy_signal)
-            sell_signals.append(sell_signal)
-            buy_confidence_scores.append(buy_confidence)
-            sell_confidence_scores.append(sell_confidence)
-            buy_quality_scores.append(buy_quality)
-            sell_quality_scores.append(sell_quality)
-            sell_categories.append(sell_divergence["sell_category"])
     
         df['buy_signal'] = buy_signals
         df['sell_signal'] = sell_signals
@@ -558,10 +639,17 @@ class EnhancedSellStrategy:
     
     def enhanced_analysis(self, df: pd.DataFrame) -> pd.DataFrame:
         """التحليل المحسن"""
-        df = self.calculate_volume_indicators(df)
-        df = self.generate_enhanced_signals(df)
-        self.analysis_results = df.to_dict('records')
-        return df
+        try:
+            df = self.calculate_volume_indicators(df)
+            df = self.generate_enhanced_signals(df)
+            self.analysis_results = df.to_dict('records')
+            return df
+        except Exception as e:
+            logger.error(f"❌ خطأ في التحليل المحسن: {e}")
+            return df
+    
+    # باقي الدوال تبقى كما هي بدون تغيير...
+    # [يتبع باقي الكود بدون تغيير من الإصدار السابق]
     
     def calculate_position_size(self, price: float, confidence: float, direction: str) -> float:
         """حساب حجم المركز"""
