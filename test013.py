@@ -321,31 +321,49 @@ class EnhancedEmaRsiMacdStrategyV3:
         return df
     
     def enhance_sell_signals(self, df: pd.DataFrame) -> pd.DataFrame:
-        """تعزيز إشارات البيع بشكل أكثر ذكاءً"""
-        
-        # تعزيز إشارات البيع عالية الجودة فقط
+        """تعزيز إشارات البيع بشكل أكثر ذكاءً وتركيزاً على الجودة"""
+    
+        # ✅ تعزيز إشارات البيع فائقة الجودة فقط
+        super_quality_sell_conditions = (
+            (df['ema_9'] < df['ema_21']) &
+            (df['ema_21'] < df['ema_50']) &
+            (df['ema_50'] < df['ema_100']) &  # اتجاه هابط قوي بمتوسطات متعددة
+            (df['rsi'] > 65) &
+            (df['macd_histogram'] < -0.003) &
+            (df['volume'] > df['volume_avg'] * 1.2)
+        )
+    
+        # ✅ تعزيز متوسط لإشارات البيع عالية الجودة
         high_quality_sell_conditions = (
             (df['ema_9'] < df['ema_21']) &
-            (df['ema_21'] < df['ema_50']) &  # تأكيد الهبوط
-            (df['rsi'] > 60) &
-            (df['macd_histogram'] < -0.001) &
+            (df['ema_21'] < df['ema_50']) &  # تأكيد الهبوط بمتوسطين
+            (df['rsi'] > 62) &
+            (df['macd_histogram'] < -0.002) &
             (df['volume'] > df['volume_avg'])
         )
-        
-        # تعزيز متوسط لإشارات البيع الجيدة
+    
+        # ✅ تعزيز خفيف للبيع الجيد
         good_sell_conditions = (
             (df['ema_9'] < df['ema_21']) &
-            (df['rsi'] > 58) &
-            (df['macd_histogram'] < 0)
+            (df['rsi'] > 60) &
+            (df['macd_histogram'] < -0.001)
         )
-        
-        # تطبيق التعزيز حسب الجودة
-        df.loc[high_quality_sell_conditions, 'score_v3'] = df.loc[high_quality_sell_conditions, 'score_v3'] * 1.3
-        df.loc[good_sell_conditions, 'score_v3'] = df.loc[good_sell_conditions, 'score_v3'] * 1.15
-        
-        # إضافة قوة الإشارة
+    
+        # تطبيق التعزيز حسب الجودة (من الأعلى إلى الأدنى)
+        df.loc[super_quality_sell_conditions, 'score_v3'] = df.loc[super_quality_sell_conditions, 'score_v3'] * 1.4  # تعزيز قوي
+        df.loc[high_quality_sell_conditions, 'score_v3'] = df.loc[high_quality_sell_conditions, 'score_v3'] * 1.25   # تعزيز متوسط
+        df.loc[good_sell_conditions, 'score_v3'] = df.loc[good_sell_conditions, 'score_v3'] * 1.1                    # تعزيز خفيف
+    
+        # ✅ تحديد قوة الإشارة بناء على مستوى التعزيز
         df['signal_strength'] = df['score_v3'] / 100.0
-        
+    
+        # ✅ تسجيل إحصائيات التعزيز
+        super_count = len(df[super_quality_sell_conditions])
+        high_count = len(df[high_quality_sell_conditions])
+        good_count = len(df[good_sell_conditions])
+    
+        logger.info(f"🎯 تعزيز إشارات البيع - فائق: {super_count}, عالي: {high_count}, جيد: {good_count}")
+    
         return df
     
     def add_smart_filters_v3(self, df: pd.DataFrame) -> pd.DataFrame:
@@ -427,8 +445,8 @@ class EnhancedEmaRsiMacdStrategyV3:
         return df
     
     def dynamic_stop_take_profit_v3(self, df: pd.DataFrame) -> pd.DataFrame:
-        """وقف وجني ديناميكي محسن للبيع"""
-        
+        """وقف وجني ديناميكي محسن جداً للبيع"""
+    
         # التحقق من وجود الأعمدة المطلوبة
         if 'atr_percent' not in df.columns:
             logger.warning("⚠️ عمود atr_percent غير موجود، إنشاء قيم افتراضية")
@@ -442,14 +460,14 @@ class EnhancedEmaRsiMacdStrategyV3:
             )
             df['atr'] = df['tr'].rolling(14).mean()
             df['atr_percent'] = df['atr'] / df['close']
-        
+    
         # حساب تقلبات السوق
         df['volatility_ratio'] = df['atr_percent'] / df['atr_percent'].rolling(50).mean()
-        
+    
         # تعبئة القيم NaN في volatility_ratio
         df['volatility_ratio'] = df['volatility_ratio'].fillna(1.0)
-        
-        # وقف وجني ديناميكي للشراء
+    
+        # وقف وجني ديناميكي للشراء (تبقى كما هي)
         df['dynamic_sl_buy'] = np.where(
             df['volatility_ratio'] > 1.5,
             1.2,
@@ -459,7 +477,7 @@ class EnhancedEmaRsiMacdStrategyV3:
                 0.8
             )
         )
-        
+    
         df['dynamic_tp_buy'] = np.where(
             df['volatility_ratio'] > 1.5,
             3.5,
@@ -469,28 +487,34 @@ class EnhancedEmaRsiMacdStrategyV3:
                 2.5
             )
         )
-        
-        # ✅ إعدادات محسنة للبيع - أكثر توازناً
+    
+        # ✅ إعدادات محسنة جداً للبيع - أكثر عدوانية وجاذبية
         df['dynamic_sl_sell'] = np.where(
             df['volatility_ratio'] > 1.5,
-            1.2,  # وقف أكبر قليلاً في التقلبات العالية
+            0.8,  # وقف صغير في التقلبات العالية
             np.where(
                 df['volatility_ratio'] < 0.7,
-                0.8,  # وقف معتدل في التقلبات المنخفضة
-                1.0   # وقف عادي (بدلاً من 0.7)
+                0.4,  # وقف صغير جداً في التقلبات المنخفضة
+                0.6   # وقف صغير عادي
             )
         )
-        
+    
         df['dynamic_tp_sell'] = np.where(
             df['volatility_ratio'] > 1.5,
-            3.2,  # جني أكبر في التقلبات العالية
+            4.0,  # جني كبير في التقلبات العالية
             np.where(
                 df['volatility_ratio'] < 0.7,
-                2.5,  # جني معتدل
-                2.8   # جني عادي (بدلاً من 2.2)
+                3.0,  # جني جيد في التقلبات المنخفضة
+                3.5   # جني كبير عادي
             )
         )
-        
+    
+        # ✅ إعدادات خاصة للبيع فائق الجودة
+        df['super_quality_sell_sl'] = df['dynamic_sl_sell'] * 0.7  # وقف أصغر
+        df['super_quality_sell_tp'] = df['dynamic_tp_sell'] * 1.2  # جني أكبر
+    
+        logger.info(f"🎯 إعدادات البيع المحسنة - وقف: {df['dynamic_sl_sell'].mean():.2f}%, جني: {df['dynamic_tp_sell'].mean():.2f}%")
+    
         return df
     
     def risk_adjusted_scoring(self, df: pd.DataFrame) -> pd.DataFrame:
@@ -514,21 +538,22 @@ class EnhancedEmaRsiMacdStrategyV3:
         
         return df
     
+    
     def generate_enhanced_signals_v3(self, df: pd.DataFrame) -> pd.DataFrame:
-        """إشارات محسنة v3 مع تحسين أداء البيع"""
-        
+        """إشارات محسنة v3 مع إعادة تصميم جذرية لشروط البيع"""
+    
         # التحقق من وجود الأعمدة المطلوبة
         required_columns = ['score_v3', 'filter_pass_buy', 'rsi', 'macd_histogram', 'close', 'ema_21', 'volume', 'volume_avg', 'ema_9', 'ema_50', 'ma_order']
         missing_columns = [col for col in required_columns if col not in df.columns]
-        
+    
         if missing_columns:
             logger.warning(f"⚠️ أعمدة مفقودة في generate_enhanced_signals_v3: {missing_columns}")
             df['signal_v3'] = 'none'
             df['confidence_level'] = 'ضعيفة'
             df['current_volatility'] = 0.0
             return df
-        
-        # الشروط الأساسية المحسنة للشراء
+    
+        # الشروط الأساسية المحسنة للشراء (تبقى كما هي - تعمل بشكل ممتاز)
         buy_condition_v3 = (
             (df['score_v3'] >= CONFIDENCE_THRESHOLD) &
             (df['filter_pass_buy'] == True) &
@@ -537,83 +562,91 @@ class EnhancedEmaRsiMacdStrategyV3:
             (df['close'] > df['ema_21']) &
             (df['volume'] > df['volume_avg'] * 0.8)
         )
-        
-        # ✅ شروط بيع محسنة - أكثر دقة وأقل صرامة
+    
+        # ✅ إعادة تصميم جذرية لشروط البيع - التركيز على الجودة
         sell_condition_v3 = (
-            (df['score_v3'] >= SELL_CONFIDENCE_THRESHOLD) &  # عتبة ثقة معقولة
+            (df['score_v3'] >= 72) &  # عتبة ثقة أعلى للبيع
             (
-                # مجموعة شروط مرنة ومتداخلة للبيع
+                # المجموعة 1: إشارات بيع عالية الجودة (الاتجاه الهبوطي المؤكد)
                 (
-                    (df['ema_9'] < df['ema_21']) &  # اتجاه هابط قصير
+                    (df['ema_9'] < df['ema_21']) & 
+                    (df['ema_21'] < df['ema_50']) &  # تأكيد الهبوط بمتوسطين
                     (df['rsi'] > 60) &  # RSI في منطقة الذروة
-                    (df['macd_histogram'] < -0.0005)  # MACD هابط بشكل معتدل
+                    (df['macd_histogram'] < -0.002)  # MACD هابط بقوة
                 ) |
+                # المجموعة 2: انعكاس من قمة (Reversal from top)
                 (
-                    (df['close'] < df['ema_21']) &  # تحت المتوسط المتوسط
-                    (df['rsi'] > 65) &  # RSI في ذروة الشراء
-                    (df['volume'] > df['volume_avg'])  # حجم جيد
+                    (df['rsi'] > 70) &  # RSI في منطقة ذروة الشراء القصوى
+                    (df['rsi'].shift(1) > 70) &  # تأكيد الاستمرار في المنطقة
+                    (df['close'] < df['close'].shift(1)) &  # بداية هبوط
+                    (df['macd_histogram'] < df['macd_histogram'].shift(1))  # MACD يضعف
                 ) |
+                # المجموعة 3: كسر دعم مع تأكيد حجم
                 (
-                    (df['ma_order'] == 'هابط قوي') &  # اتجاه هابط قوي
-                    (df['rsi'] > 55)  # RSI أعلى من المنتصف
+                    (df['close'] < df['ema_50']) &  # تحت المتوسط الطويل
+                    (df['close'] < df['close'].rolling(20).min()) &  # كسر قاع 20 فترة
+                    (df['volume'] > df['volume_avg'] * 1.5)  # حجم عالي يؤكد الكسر
                 )
             ) &
-            (df['volume'] > df['volume_avg'] * 0.6)  # حجم معقول
+            (df['volume'] > df['volume_avg'] * 0.8)  # حجم جيد
         )
-        
-        # ✅ شروط بيع عالية الجودة (لتحسين النجاح)
-        high_quality_sell = (
-            (df['score_v3'] >= 75) &
+    
+        # ✅ شروط بيع فائقة الجودة (لتحقيق نتائج أفضل)
+        super_quality_sell = (
+            (df['score_v3'] >= 80) &
             (df['ema_9'] < df['ema_21']) &
-            (df['ema_21'] < df['ema_50']) &  # تأكيد الهبوط
-            (df['rsi'] > 62) &
-            (df['macd_histogram'] < -0.001) &
-            (df['volume'] > df['volume_avg'] * 0.8)
+            (df['ema_21'] < df['ema_50']) &
+            (df['ema_50'] < df['ema_100']) &  # اتجاه هابط قوي بمتوسطات متعددة
+            (df['rsi'] > 65) &
+            (df['macd_histogram'] < -0.003) &
+            (df['volume'] > df['volume_avg'] * 1.2)
         )
-        
-        # تطبيق الإشارات مع الأولوية للجودة العالية
+    
+        # تطبيق الإشارات مع الأولوية القصوى للجودة الفائقة
         df['signal_v3'] = 'none'
         df.loc[buy_condition_v3, 'signal_v3'] = 'LONG'
-        df.loc[high_quality_sell, 'signal_v3'] = 'SHORT'
+        df.loc[super_quality_sell, 'signal_v3'] = 'SHORT'
         df.loc[sell_condition_v3 & (df['signal_v3'] == 'none'), 'signal_v3'] = 'SHORT'
-        
-        # ✅ منع الإشارات المتضاربة في نفس الشمعة
-        conflicting_signals = (df['signal_v3'] == 'LONG') & (df['signal_v3'] == 'SHORT')
-        if conflicting_signals.any():
-            logger.warning(f"⚠️ تم اكتشاف {conflicting_signals.sum()} إشارة متضاربة - إعطاء الأولوية للبيع")
-            # في حالة التعارض، نعطي الأولوية لإشارات البيع المعززة
-            enhanced_sell_mask = high_quality_sell & conflicting_signals
-            df.loc[enhanced_sell_mask, 'signal_v3'] = 'SHORT'
-            df.loc[conflicting_signals & ~enhanced_sell_mask, 'signal_v3'] = 'none'
-        
+    
+        # ✅ فلتر إضافي للبيع: منع الإشارات في الأسواق الجانبية القوية
+        sideways_market = (
+            (df['ema_50'] - df['ema_50'].shift(5)).abs() / df['ema_50'] < 0.01  # تقلبات صغيرة
+        )
+        df.loc[sideways_market & (df['signal_v3'] == 'SHORT'), 'signal_v3'] = 'none'
+    
         # إضافة مستوى الثقة النهائي
         df['confidence_level'] = df['score_v3'].apply(self.calculate_confidence_level)
-        
-        # إضافة التقلبات للتحليل (مع معالجة القيم المفقودة)
+    
+        # إضافة التقلبات للتحليل
         if 'atr_percent' in df.columns:
             df['current_volatility'] = df['atr_percent'].fillna(df['atr_percent'].mean())
         else:
-            df['current_volatility'] = 0.02  # قيمة افتراضية
-        
-        # ✅ تسجيل إحصائيات الإشارات
+            df['current_volatility'] = 0.02
+    
+        # ✅ تسجيل إحصائيات مفصلة
         total_signals = len(df[df['signal_v3'] != 'none'])
         buy_signals = len(df[df['signal_v3'] == 'LONG'])
         sell_signals = len(df[df['signal_v3'] == 'SHORT'])
-        
-        logger.info(f"📊 إحصائيات الإشارات - شراء: {buy_signals}, بيع: {sell_signals}, مجمل: {total_signals}")
-        
+        super_sell_signals = len(df[super_quality_sell & (df['signal_v3'] == 'SHORT')])
+    
+        logger.info(f"📊 إحصائيات الإشارات - شراء: {buy_signals}, بيع عادي: {sell_signals - super_sell_signals}, بيع فائق: {super_sell_signals}")
+    
         # ✅ تحليل جودة إشارات البيع
         if sell_signals > 0:
             sell_confidence_avg = df[df['signal_v3'] == 'SHORT']['score_v3'].mean()
             sell_rsi_avg = df[df['signal_v3'] == 'SHORT']['rsi'].mean()
-            high_quality_count = len(df[high_quality_sell & (df['signal_v3'] == 'SHORT')])
-            logger.info(f"🔽 تحليل إشارات البيع - متوسط الثقة: {sell_confidence_avg:.1f}%, متوسط RSI: {sell_rsi_avg:.1f}, عالية الجودة: {high_quality_count}")
+            logger.info(f"🔽 تحليل إشارات البيع - متوسط الثقة: {sell_confidence_avg:.1f}%, متوسط RSI: {sell_rsi_avg:.1f}")
         
+            # تحليل البيع فائق الجودة
+            if super_sell_signals > 0:
+                super_sell_confidence = df[super_quality_sell & (df['signal_v3'] == 'SHORT')]['score_v3'].mean()
+                logger.info(f"🎯 البيع فائق الجودة - متوسط الثقة: {super_sell_confidence:.1f}%")
+    
         if buy_signals > 0:
             buy_confidence_avg = df[df['signal_v3'] == 'LONG']['score_v3'].mean()
             buy_rsi_avg = df[df['signal_v3'] == 'LONG']['rsi'].mean()
             logger.info(f"🔼 تحليل إشارات الشراء - متوسط الثقة: {buy_confidence_avg:.1f}%, متوسط RSI: {buy_rsi_avg:.1f}")
-        
+    
         return df
     
     def calculate_confidence_level(self, score: float) -> str:
@@ -674,19 +707,28 @@ class EnhancedEmaRsiMacdStrategyV3:
         return (TRADE_SIZE_USDT * LEVERAGE) / price
     
     def open_position(self, symbol: str, direction: str, price: float, 
-                     confidence: float, confidence_level: str, 
-                     volatility: float, timestamp: datetime, 
-                     dynamic_sl: float, dynamic_tp: float,
-                     signal_strength: float) -> Optional[Trade]:
-        """فتح مركز جديد مع الإعدادات الديناميكية"""
-        
+                 confidence: float, confidence_level: str, 
+                 volatility: float, timestamp: datetime, 
+                 dynamic_sl: float, dynamic_tp: float,
+                 signal_strength: float) -> Optional[Trade]:
+        """فتح مركز جديد مع إعدادات خاصة للبيع"""
+    
         if symbol in self.positions:
             logger.warning(f"يوجد مركز مفتوح بالفعل لـ {symbol}")
             return None
-        
+    
         # حساب حجم المركز
         quantity = self.calculate_position_size(price)
-        
+    
+        # ✅ إعدادات خاصة للبيع فائق الجودة
+        is_high_quality_sell = (direction == "SHORT" and confidence >= 80)
+    
+        if is_high_quality_sell:
+            # تقليل وقف الخسارة وزيادة جني الأرباح للبيع عالي الجودة
+            dynamic_sl = dynamic_sl * 0.7  # تقليل الوقف بنسبة 30%
+            dynamic_tp = dynamic_tp * 1.3  # زيادة الجني بنسبة 30%
+            logger.info(f"🎯 تطبيق إعدادات البيع فائق الجودة - وقف: {dynamic_sl:.2f}%, جني: {dynamic_tp:.2f}%")
+    
         # حساب وقف الخسارة وجني الأرباح (ديناميكي)
         if direction == "LONG":
             stop_loss = price * (1 - dynamic_sl / 100)
@@ -694,11 +736,11 @@ class EnhancedEmaRsiMacdStrategyV3:
         else:  # SHORT
             stop_loss = price * (1 + dynamic_sl / 100)
             take_profit = price * (1 - dynamic_tp / 100)
-        
+    
         # رسوم التداول
         fee = (TRADE_SIZE_USDT * LEVERAGE) * 0.0004
         self.current_balance -= fee
-        
+    
         trade = Trade(
             symbol=symbol,
             direction=direction,
@@ -713,13 +755,18 @@ class EnhancedEmaRsiMacdStrategyV3:
             volatility=volatility,
             signal_strength=signal_strength
         )
-        
+    
         self.positions[symbol] = trade
         self.trades.append(trade)
-        
-        logger.info(f"📈 فتح مركز {direction} لـ {symbol} "
-                   f"السعر: {price:.2f}, الثقة: {confidence:.1f}% ({confidence_level})")
-        
+    
+        # ✅ تسجيل مفصل للمراكز عالية الجودة
+        if is_high_quality_sell:
+            logger.info(f"🚀 فتح مركز بيع فائق الجودة لـ {symbol} "
+                       f"السعر: {price:.2f}, الثقة: {confidence:.1f}% ({confidence_level})")
+        else:
+            logger.info(f"📈 فتح مركز {direction} لـ {symbol} "
+                       f"السعر: {price:.2f}, الثقة: {confidence:.1f}% ({confidence_level})")
+    
         return trade
     
     def close_position(self, symbol: str, price: float, timestamp: datetime, 
@@ -1062,33 +1109,60 @@ class EnhancedEmaRsiMacdStrategyV3:
         return message
     
     def _generate_trade_analysis_v3(self, backtest_result: BacktestResult) -> str:
-        """إنشاء تحليل البيع والشراء v3"""
-        
+        """إنشاء تحليل مفصل للبيع والشراء مع توصيات"""
+    
         message = "🔍 *تحليل مفصل للبيع والشراء v3:*\n"
         message += "────────────────────\n"
-        
+    
         # تحليل الشراء
         buy = backtest_result.buy_performance
         message += f"🔼 *صفقات الشراء:*\n"
         message += f"• العدد: `{buy['total_trades']}` صفقة\n"
-        message += f"• الربح: `${buy['total_pnl']:.2f}`\n"
+        message += f"• الربح: `${buy['total_pnl']:.2f}` {'✅' if buy['total_pnl'] > 0 else '❌'}\n"
         message += f"• متوسط الربح: `${buy['avg_pnl']:.2f}`\n"
         message += f"• نسبة النجاح: `{buy['win_rate']:.1f}%`\n\n"
-        
+    
         # تحليل البيع
         sell = backtest_result.sell_performance
         message += f"🔽 *صفقات البيع المحسنة:*\n"
         message += f"• العدد: `{sell['total_trades']}` صفقة\n"
-        message += f"• الربح: `${sell['total_pnl']:.2f}`\n"
+        message += f"• الربح: `${sell['total_pnl']:.2f}` {'✅' if sell['total_pnl'] > 0 else '❌'}\n"
         message += f"• متوسط الربح: `${sell['avg_pnl']:.2f}`\n"
         message += f"• نسبة النجاح: `{sell['win_rate']:.1f}%`\n\n"
-        
-        # تحسينات البيع
-        improvement = "📈" if sell['win_rate'] > buy['win_rate'] else "📉"
-        message += f"{improvement} *مقارنة الأداء:*\n"
-        message += f"• فرق النجاح: `{sell['win_rate'] - buy['win_rate']:+.1f}%`\n"
-        message += f"• فرق الربح: `${sell['total_pnl'] - buy['total_pnl']:+.2f}`\n"
-        
+    
+        # تحليل الأداء المقارن
+        performance_gap = sell['win_rate'] - buy['win_rate']
+        profit_gap = sell['total_pnl'] - buy['total_pnl']
+    
+        message += f"📊 *مقارنة الأداء:*\n"
+        message += f"• فرق النجاح: `{performance_gap:+.1f}%`\n"
+        message += f"• فرق الربح: `${profit_gap:+.2f}`\n\n"
+    
+        # ✅ توصيات تحسين البيع بناء على النتائج
+        message += f"🎯 *توصيات تحسين البيع:*\n"
+    
+        if sell['win_rate'] < 40:
+            message += f"• رفع عتبة ثقة البيع إلى `75%` ⚠️\n"
+            message += f"• تشديد شروط البيع (متوسطات متعددة) 🔧\n"
+            message += f"• تحسين إعدادات الوقف والجني 📊\n"
+            message += f"• التركيز على البيع فائق الجودة 🎯\n"
+        elif sell['avg_pnl'] < 0:
+            message += f"• تقليل وقف الخسارة للبيع (0.4-0.6%) 📉\n"
+            message += f"• زيادة جني الأرباح للبيع (3.5-4.0%) 📈\n"
+            message += f"• التركيز على البيع عالي الجودة فقط 🎯\n"
+        elif sell['win_rate'] >= 45 and sell['total_pnl'] > 0:
+            message += f"• الاستمرار في الإعدادات الحالية ✅\n"
+            message += f"• تحسين تدريجي في شروط البيع 📈\n"
+         else:
+            message += f"• مراجعة شروط البيع الحالية 🔍\n"
+            message += f"• تحليل أسباب ضعف الأداء 📊\n"
+    
+        # ✅ إضافة تحليل الثقة
+        if backtest_result.avg_confidence > 75:
+            message += f"\n📈 *مستوى الثقة:* `مرتفع ({backtest_result.avg_confidence:.1f}%)` ✅\n"
+        else:
+            message += f"\n📈 *مستوى الثقة:* `منخفض ({backtest_result.avg_confidence:.1f}%)` ⚠️\n"
+    
         return message
 
     def _create_enhanced_performance_chart_v3(self, df: pd.DataFrame, backtest_result: BacktestResult) -> BytesIO:
