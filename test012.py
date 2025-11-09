@@ -450,8 +450,19 @@ class EnhancedEmaRsiMacdStrategyV3:
         return df
     
     def generate_enhanced_signals_v3(self, df: pd.DataFrame) -> pd.DataFrame:
-        """إشارات محسنة v3 مع تحسين البيع"""
-        
+        """إشارات محسنة v3 مع تحسين البيع - نسخة محدثة"""
+    
+        # التحقق من وجود الأعمدة المطلوبة
+        required_columns = ['score_v3', 'filter_pass_buy', 'rsi', 'macd_histogram', 'close', 'ema_21', 'volume', 'volume_avg']
+        missing_columns = [col for col in required_columns if col not in df.columns]
+    
+        if missing_columns:
+            logger.warning(f"⚠️ أعمدة مفقودة في generate_enhanced_signals_v3: {missing_columns}")
+            df['signal_v3'] = 'none'
+            df['confidence_level'] = 'ضعيفة'
+            df['current_volatility'] = 0.0
+            return df
+    
         # الشروط الأساسية المحسنة للشراء
         buy_condition_v3 = (
             (df['score_v3'] >= CONFIDENCE_THRESHOLD) &
@@ -461,27 +472,88 @@ class EnhancedEmaRsiMacdStrategyV3:
             (df['close'] > df['ema_21']) &
             (df['volume'] > df['volume_avg'] * 0.8)
         )
-        
-        # ✅ شروط محسنة ومشددة للبيع
+    
+        # ✅ شروط بيع محسنة وأكثر مرونة - الإصدار المحدث
         sell_condition_v3 = (
-            (df['score_v3'] >= CONFIDENCE_THRESHOLD) &
-            (df['filter_pass_sell_enhanced'] == True) &  # استخدام الفلتر المشدد
-            (df['rsi'] >= 50) & (df['rsi'] <= 70) &  # نطاق RSI أعلى للبيع
-            (df['macd_histogram'] < -0.001) &  # شروط MACD مرنة ولكن هابطة
-            (df['close'] < df['ema_50']) &  # تحت المتوسط الطويل
-            (df['volume'] > df['volume_avg'] * 0.9)  # حجم أعلى للبيع
+            (df['score_v3'] >= max(60, CONFIDENCE_THRESHOLD - 5)) &  # عتبة مرنة (60 كحد أدنى)
+            (
+                # مجموعة شروط مرنة للبيع
+                (df['strong_downtrend']) |  # 1. اتجاه هابط قوي
+                (
+                    (df['ema_9'] < df['ema_21']) &  # 2. اتجاه هابط متوسط
+                    (df['ema_21'] < df['ema_50']) &  # تأكيد الهبوط
+                    (df['close'] < df['ema_21']) &  # تحت المتوسط المتوسط
+                    (df['rsi'] > 55)  # RSI في منطقة الذروة
+                ) |
+                (
+                    (df['rsi'] > 65) &  # 3. RSI في منطقة ذروة الشراء
+                    (df['close'] < df['ema_50']) &  # تحت المتوسط الطويل
+                    (df['macd_histogram'] < -0.001)  # تأكيد هبوط
+                ) |
+                (
+                    (df['ma_order'] == 'هابط قوي') &  # 4. نظام المتوسطات هابط
+                    (df['rsi'] > 50)  # RSI أعلى من المنتصف
+                )
+            ) &
+            (df['macd_histogram'] < 0) &  # MACD هابط (أكثر مرونة من -0.001)
+            (df['volume'] > df['volume_avg'] * 0.7) &  # حجم معقول
+            (df['close'] < df['ema_50'])  # تحت المتوسط الطويل لتأكيد الهبوط
         )
-        
+    
+        # ✅ شروط إضافية لتعزيز البيع في ظروف محددة
+        enhanced_sell_conditions = (
+            (df['score_v3'] >= 75) &  # ثقة عالية
+            (df['rsi'] > 70) &  # RSI في منطقة ذروة الشراء القصوى
+            (df['macd_histogram'] < -0.002) &  # MACD هابط بقوة
+            (df['close'] < df['ema_21'])  # تحت المتوسط المتوسط
+        )
+    
+        # تطبيق الإشارات
         df['signal_v3'] = 'none'
+    
+        # الأولوية للإشارات المعززة
+        df.loc[enhanced_sell_conditions, 'signal_v3'] = 'SHORT'
+    
+        # ثم الإشارات العادية
         df.loc[buy_condition_v3, 'signal_v3'] = 'LONG'
-        df.loc[sell_condition_v3, 'signal_v3'] = 'SHORT'
-        
+        df.loc[sell_condition_v3 & (df['signal_v3'] == 'none'), 'signal_v3'] = 'SHORT'
+    
+        # ✅ منع الإشارات المتضاربة في نفس الشمعة
+        conflicting_signals = (df['signal_v3'] == 'LONG') & (df['signal_v3'] == 'SHORT')
+        if conflicting_signals.any():
+            logger.warning(f"⚠️ تم اكتشاف {conflicting_signals.sum()} إشارة متضاربة - إعطاء الأولوية للبيع")
+            # في حالة التعارض، نعطي الأولوية لإشارات البيع المعززة
+            enhanced_sell_mask = enhanced_sell_conditions & conflicting_signals
+            df.loc[enhanced_sell_mask, 'signal_v3'] = 'SHORT'
+            df.loc[conflicting_signals & ~enhanced_sell_mask, 'signal_v3'] = 'none'
+    
         # إضافة مستوى الثقة النهائي
         df['confidence_level'] = df['score_v3'].apply(self.calculate_confidence_level)
-        
-        # إضافة التقلبات للتحليل
-        df['current_volatility'] = df['atr_percent']
-        
+    
+        # إضافة التقلبات للتحليل (مع معالجة القيم المفقودة)
+        if 'atr_percent' in df.columns:
+            df['current_volatility'] = df['atr_percent'].fillna(df['atr_percent'].mean())
+        else:
+            df['current_volatility'] = 0.02  # قيمة افتراضية
+    
+        # ✅ تسجيل إحصائيات الإشارات
+        total_signals = len(df[df['signal_v3'] != 'none'])
+        buy_signals = len(df[df['signal_v3'] == 'LONG'])
+        sell_signals = len(df[df['signal_v3'] == 'SHORT'])
+    
+        logger.info(f"📊 إحصائيات الإشارات - شراء: {buy_signals}, بيع: {sell_signals}, مجمل: {total_signals}")
+    
+        # ✅ تحليل جودة إشارات البيع
+        if sell_signals > 0:
+            sell_confidence_avg = df[df['signal_v3'] == 'SHORT']['score_v3'].mean()
+            sell_rsi_avg = df[df['signal_v3'] == 'SHORT']['rsi'].mean()
+            logger.info(f"🔽 تحليل إشارات البيع - متوسط الثقة: {sell_confidence_avg:.1f}%, متوسط RSI: {sell_rsi_avg:.1f}")
+    
+        if buy_signals > 0:
+            buy_confidence_avg = df[df['signal_v3'] == 'LONG']['score_v3'].mean()
+            buy_rsi_avg = df[df['signal_v3'] == 'LONG']['rsi'].mean()
+            logger.info(f"🔼 تحليل إشارات الشراء - متوسط الثقة: {buy_confidence_avg:.1f}%, متوسط RSI: {buy_rsi_avg:.1f}")
+    
         return df
     
     def calculate_confidence_level(self, score: float) -> str:
