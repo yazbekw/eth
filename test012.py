@@ -498,39 +498,39 @@ class EnhancedEmaRsiMacdStrategyV3:
             return "ضعيفة"
     
     def enhanced_analysis_v3(self, df: pd.DataFrame) -> pd.DataFrame:
-        """التحليل المحسن v3 - الدالة الرئيسية"""
-        
+        """التحليل المحسن v3 - الدالة الرئيسية مع إصلاح الترتيب"""
+    
         # 1. حساب المؤشرات الأساسية
         df['rsi'] = self.calculate_rsi(df['close'])
         macd_line, signal_line, histogram = self.calculate_macd(df['close'])
         df['macd_line'] = macd_line
         df['macd_signal'] = signal_line
         df['macd_histogram'] = histogram
-        
+    
         # 2. تحليل الاتجاه
         df = self.analyze_trend(df)
-        
-        # 3. نظام التقييم المحسن
-        df = self.enhanced_scoring_system_v3(df)
-        
-        # 4. تعزيز إشارات البيع
-        df = self.enhance_sell_signals(df)
-        
-        # 5. تقييم معدل حسب المخاطرة
-        df = self.risk_adjusted_scoring(df)
-        
-        # 6. إضافة عوامل التصفية
+    
+        # 3. إضافة عوامل التصفية أولاً (لإنشاء atr_percent)
         df = self.add_smart_filters_v3(df)
-        
-        # 7. وقف وجني ديناميكي
+    
+        # 4. نظام التقييم المحسن
+        df = self.enhanced_scoring_system_v3(df)
+    
+        # 5. تعزيز إشارات البيع
+        df = self.enhance_sell_signals(df)
+    
+        # 6. وقف وجني ديناميكي (يحتاج atr_percent)
         df = self.dynamic_stop_take_profit_v3(df)
-        
+    
+        # 7. تقييم معدل حسب المخاطرة (يحتاج atr_percent)
+        df = self.risk_adjusted_scoring(df)
+    
         # 8. إشارات محسنة
         df = self.generate_enhanced_signals_v3(df)
-        
+    
         # حفظ نتائج التحليل
         self.analysis_results = df.to_dict('records')
-        
+    
         return df
     
     # =========================================================================
