@@ -177,9 +177,9 @@ class EnhancedEmaRsiMacdStrategyV5:
         self.sell_performance_history = []
         
         # إعدادات البيع المحسنة v5 - أكثر مرونة
-        self.SELL_CONFIDENCE_THRESHOLD = 68  # خفض كبير
-        self.SUPER_QUALITY_SELL_THRESHOLD = 78
-        self.HIGH_QUALITY_SELL_THRESHOLD = 73
+        self.SELL_CONFIDENCE_THRESHOLD = 70  # خفض كبير
+        self.SUPER_QUALITY_SELL_THRESHOLD = 80
+        self.HIGH_QUALITY_SELL_THRESHOLD = 75
         self.GOOD_QUALITY_SELL_THRESHOLD = 65
     
     # =========================================================================
@@ -397,10 +397,10 @@ class EnhancedEmaRsiMacdStrategyV5:
         super_quality_sell = (
             (df['score_v5'] >= self.SUPER_QUALITY_SELL_THRESHOLD) &
             (df['ema_9'] < df['ema_21']) &
-            (df['ema_21'] < df['ema_50']) &
-            (df['rsi'] > 62) &  # زيادة من 60 إلى 62
-            (df['macd_histogram'] < -0.0025) &  # زيادة من -0.002 إلى -0.0025
-            (df['filter_pass_sell'] == True)
+            (df['ema_21'] < df['ema_50']) &  # إضافة شرط متوسط إضافي
+            (df['rsi'] > 65) &  # من 62 إلى 65
+            (df['macd_histogram'] < -0.003) &  # من -0.0025 إلى -0.003
+            (df['volume'] > df['volume_avg'] * 1.2)  # من 1.1 إلى 1.2
         )
         
         high_quality_sell = (
