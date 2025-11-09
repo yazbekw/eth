@@ -269,30 +269,37 @@ class EnhancedVolumeDivergenceStrategy:
         
         return {"divergence": "none", "strength": 0}
     
-    def calculate_quality_score(self, df_row: pd.Series, divergence_data: Dict) -> float:
+    def calculate_quality_score(self, df_row: pd.Series, divergence_data: Dict, df: pd.DataFrame, current_index: int) -> float:
         """حساب درجة الجودة للإشارة"""
         quality_score = 0
-        
+    
         # 1. جودة الحجم (40 نقطة)
         volume_score = min(40, (df_row['volume_ratio_20'] - 1) * 20)
         quality_score += volume_score
-        
+    
         # 2. استقرار الحجم (20 نقطة)
-        if df_row['volume_volatility'] < df_row['volume_volatility'] * 0.8:
-            quality_score += 20
-        
+        if current_index >= 20:  # تأكد من وجود بيانات كافية
+            volume_volatility = df['volume'].iloc[current_index-20:current_index].std()
+            current_volume_volatility = df['volume'].iloc[current_index-5:current_index].std() if current_index >= 5 else volume_volatility
+            if current_volume_volatility < volume_volatility * 0.8:
+                quality_score += 20
+    
         # 3. قوة الانزياح (20 نقطة)
         divergence_strength = min(20, divergence_data["strength"] / 5)
         quality_score += divergence_strength
-        
+    
         # 4. تأكيد الاتجاه (20 نقطة)
-        if ((divergence_data["divergence"] in ["positive_bullish", "volume_confirmation"] and 
-             df_row['close'] > df_row['close'].shift(5)) or
-            (divergence_data["divergence"] in ["negative_bearish"] and 
-             df_row['close'] < df_row['close'].shift(5))):
-            quality_score += 20
+        if current_index >= 5:  # تأكد من وجود بيانات كافية
+            current_close = df_row['close']
+            previous_close = df['close'].iloc[current_index - 5]
         
-        return min(100, quality_score)
+            if ((divergence_data["divergence"] in ["positive_bullish", "volume_confirmation"] and 
+                 current_close > previous_close) or
+                (divergence_data["divergence"] in ["negative_bearish"] and 
+                 current_close < previous_close)):
+                quality_score += 20
+    
+        return min(100, quality_score)    
     
     def enhanced_confidence_system(self, divergence_data: Dict, quality_score: float) -> float:
         """نظام ثقة محسن مع عقوبات للأداء الضعيف"""
@@ -363,12 +370,12 @@ class EnhancedVolumeDivergenceStrategy:
     
     def generate_enhanced_signals(self, df: pd.DataFrame) -> pd.DataFrame:
         """توليد إشارات محسنة"""
-        
+    
         signals = []
         confidence_scores = []
         divergence_types = []
         quality_scores = []
-        
+    
         for i in range(len(df)):
             if i < 50:  # تحتاج إلى بيانات أكثر للتحليل المتقدم
                 signals.append('none')
@@ -376,27 +383,27 @@ class EnhancedVolumeDivergenceStrategy:
                 divergence_types.append('none')
                 quality_scores.append(0)
                 continue
-            
+        
             # استخراج البيانات
             prices = df['close'].iloc[:i+1].tolist()
             volumes = df['volume'].iloc[:i+1].tolist()
-            
+        
             # حساب الانزياح المحسن
             divergence_data = self.calculate_enhanced_divergence(prices, volumes)
-            
+        
             if divergence_data["divergence"] == "none":
                 signals.append('none')
                 confidence_scores.append(0)
                 divergence_types.append('none')
                 quality_scores.append(0)
                 continue
-            
-            # حساب درجة الجودة
-            quality_score = self.calculate_quality_score(df.iloc[i], divergence_data)
-            
+        
+            # حساب درجة الجودة مع تمرير الفهرس الحالي
+            quality_score = self.calculate_quality_score(df.iloc[i], divergence_data, df, i)
+        
             # حساب الثقة المحسنة
             confidence = self.enhanced_confidence_system(divergence_data, quality_score)
-            
+        
             # تحديد الإشارة مع شروط أكثر تشدداً
             signal = 'none'
             if confidence >= CONFIDENCE_THRESHOLD and quality_score >= 60:
@@ -408,17 +415,17 @@ class EnhancedVolumeDivergenceStrategy:
                     # تأكيد إضافي للبيع
                     if prices[-1] < np.mean(prices[-20:]):  # تحت المتوسط
                         signal = "SELL"
-            
+        
             signals.append(signal)
             confidence_scores.append(confidence)
             divergence_types.append(divergence_data["divergence"])
             quality_scores.append(quality_score)
-        
+    
         df['volume_signal'] = signals
         df['volume_confidence'] = confidence_scores
         df['divergence_type'] = divergence_types
         df['quality_score'] = quality_scores
-        
+    
         return df
     
     def enhanced_volume_analysis(self, df: pd.DataFrame) -> pd.DataFrame:
