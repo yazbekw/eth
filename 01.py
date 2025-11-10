@@ -17,7 +17,7 @@ TRADE_CONFIG = {
     'leverage': 3,
     'stop_loss': 0.03,    # 2.5% - زيادة من 2%
     'take_profit': 0.045,  # 3.5% - تقليل من 4% لتحسين نسبة R:R
-    'position_size': 0.07,  # 7% - تقليل من 10%
+    'position_size': 0.1,  # 7% - تقليل من 10%
     'max_positions': 3
 }
 
