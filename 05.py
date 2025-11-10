@@ -11,7 +11,7 @@ warnings.filterwarnings('ignore')
 
 # إعدادات التداول
 TRADE_CONFIG = {
-    'symbol': 'ADAUSDT',
+    'symbol': 'BNBUSDT',
     'timeframe': '1h',
     'initial_balance': 1000,
     'leverage': 3,
@@ -63,7 +63,7 @@ class SimpleCryptoBot:
         self.initial_balance = trade_config['initial_balance']
         self.paper_trading = trade_config.get('paper_trading', True)
         
-    def fetch_binance_data(self, days=90):
+    def fetch_binance_data(self, days=180):
         """جلب البيانات من Binance"""
         try:
             symbol = self.trade_config['symbol']
@@ -476,7 +476,7 @@ def main():
     print("🚀 بدء تشغيل البوت مع التحسينات النهائية...")
     
     bot = SimpleCryptoBot(TRADE_CONFIG, INDICATOR_CONFIG, SIGNAL_CONFIG)
-    bot.fetch_binance_data(days=90)
+    bot.fetch_binance_data(days=180)
     bot.execute_backtest()
     
     report = bot.generate_report()
