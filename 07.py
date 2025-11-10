@@ -35,7 +35,7 @@ INDICATOR_CONFIG = {
 }
 
 SIGNAL_CONFIG = {
-    'min_conditions': 2,
+    'min_conditions': 1,
     'use_trend_filter': True,
     'use_volume_filter': False,
     'min_volume_ratio': 0.8
