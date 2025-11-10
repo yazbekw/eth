@@ -15,15 +15,15 @@ TRADE_CONFIG = {
     'timeframe': '1h',
     'initial_balance': 1000,
     'leverage': 3,
-    'stop_loss': 0.03,    # 2.5% - زيادة من 2%
-    'take_profit': 0.045,  # 3.5% - تقليل من 4% لتحسين نسبة R:R
-    'position_size': 0.07,  # 7% - تقليل من 10%
+    'stop_loss': 0.025,    # 2.5% - زيادة من 2%
+    'take_profit': 0.05,  # 3.5% - تقليل من 4% لتحسين نسبة R:R
+    'position_size': 0.06,  # 7% - تقليل من 10%
     'max_positions': 3
 }
 
 # إعدادات المؤشرات
 INDICATOR_CONFIG = {
-    'rsi_period': 14,      # زيادة من 14 إلى 21
+    'rsi_period': 21,      # زيادة من 14 إلى 21
     'rsi_overbought': 70,
     'rsi_oversold': 30,
     'ema_fast': 9,
