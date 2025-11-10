@@ -957,6 +957,113 @@ class EnhancedEmaRsiMacdStrategyV4:
         df.loc[high_risk_mask, 'score_v4'] = df.loc[high_risk_mask, 'score_v4'] * 0.8  # زيادة من 0.85 إلى 0.8
         
         return df
+
+    # أضف هذه الدالة داخل class EnhancedEmaRsiMacdStrategyV4:
+
+    def generate_ultra_smart_signals_v4_3(self, df: pd.DataFrame) -> pd.DataFrame:
+        """إشارات ذكية فائقة v4.3 مع تفعيل البيع"""
+    
+        # التحليل الذكي للسوق
+        market_analysis = self.analyze_market_conditions_v4_2(df)
+    
+        # 1. الشروط الأساسية للشراء (محسنة)
+        buy_condition = (
+            (df['score_v4'] >= CONFIDENCE_THRESHOLD) &
+            (df['filter_pass_buy'] == True) &
+            (df['rsi'] >= 35) & (df['rsi'] <= 65) &
+            (df['macd_histogram'] > -0.001) &  # تخفيف الشرط
+            (df['close'] > df['ema_21']) &
+            (df['volume'] > df['volume_avg'] * 0.5)  # تخفيف كبير
+        )
+    
+        # 2. شروط البيع الفائقة الذكية v4.3 - ميسرة جداً
+        ultra_smart_super_sell = (
+            (df['score_v4'] >= 70) &  # عتبة منخفضة
+            (df['ema_9'] < df['ema_21']) &
+            (df['rsi'] > 58) &  # RSI معقول
+            (df['macd_histogram'] < -0.0005) &  # تخفيف كبير
+            (df['volume'] > df['volume_avg'] * 0.6)  # تخفيف كبير
+        )
+    
+        ultra_smart_high_sell = (
+            (df['score_v4'] >= 65) &
+            (df['ema_9'] < df['ema_21']) &
+            (df['rsi'] > 56) &
+            (df['macd_histogram'] < 0) &  # أي قيمة سلبية
+            (df['volume'] > df['volume_avg'] * 0.5)
+        )
+    
+        ultra_smart_good_sell = (
+            (df['score_v4'] >= 60) &  # عتبة منخفضة جداً
+            (df['ema_9'] < df['ema_21']) &
+            (df['rsi'] > 54) &  # RSI منخفض
+            (df['macd_histogram'] < 0) &  # أي قيمة سلبية
+            (df['volume'] > df['volume_avg'] * 0.4)  # حجم منخفض
+        )
+    
+        # 3. شروط البيع الاستثنائية في الأسواق الهابطة
+        bearish_market_sell = (
+            (market_analysis['market_phase'] == "BEARISH") &
+            (df['score_v4'] >= 55) &  # عتبة منخفضة جداً
+            (df['ema_9'] < df['ema_21']) &
+            (df['rsi'] > 50)  # RSI أساسي فقط
+        )
+    
+        # 4. شروط البيع عند المقاومة
+        resistance_sell = (
+            (market_analysis['support_resistance']['near_resistance']) &
+            (df['score_v4'] >= 60) &
+            (df['ema_9'] < df['ema_21']) &
+            (df['rsi'] > 55)
+        )
+    
+        # ✅ تطبيق جميع إشارات البيع مع الأولوية
+        df['signal_v4'] = 'none'
+    
+        # أولاً: تطبيق الشراء
+        df.loc[buy_condition, 'signal_v4'] = 'LONG'
+    
+        # ثانياً: تطبيق البيع مع الأولوية القصوى
+        sell_conditions = [
+            (ultra_smart_super_sell, 'SUPER'),
+            (ultra_smart_high_sell, 'HIGH'),
+            (ultra_smart_good_sell, 'GOOD'),
+            (bearish_market_sell, 'HIGH'),  # في السوق الهابط
+            (resistance_sell, 'GOOD')  # عند المقاومة
+        ]
+    
+        for condition, quality in sell_conditions:
+            mask = condition & (df['signal_v4'] == 'none')
+            df.loc[mask, 'signal_v4'] = 'SHORT'
+            df.loc[mask, 'signal_quality'] = quality
+    
+        # ✅ تحديث مستوى الثقة
+        df['confidence_level'] = df['score_v4'].apply(self.calculate_intelligent_confidence_v4_2)
+    
+        # ✅ التسجيل المفصل
+        total_signals = len(df[df['signal_v4'] != 'none'])
+        buy_signals = len(df[df['signal_v4'] == 'LONG'])
+        sell_signals = len(df[df['signal_v4'] == 'SHORT'])
+    
+        # تحليل إشارات البيع بالتفصيل
+        super_sells = len(df[ultra_smart_super_sell & (df['signal_v4'] == 'SHORT')])
+        high_sells = len(df[ultra_smart_high_sell & (df['signal_v4'] == 'SHORT')])
+        good_sells = len(df[ultra_smart_good_sell & (df['signal_v4'] == 'SHORT')])
+        bearish_sells = len(df[bearish_market_sell & (df['signal_v4'] == 'SHORT')])
+        resistance_sells = len(df[resistance_sell & (df['signal_v4'] == 'SHORT')])
+    
+        logger.info(f"🧠 الإشارات الذكية الفائقة v4.3:")
+        logger.info(f"   • الإجمالي: {total_signals}, شراء: {buy_signals}, بيع: {sell_signals}")
+        logger.info(f"   • البيع فائق: {super_sells}, عالي: {high_sells}, جيد: {good_sells}")
+        logger.info(f"   • بيع هابط: {bearish_sells}, بيع مقاومة: {resistance_sells}")
+        logger.info(f"   • مرحلة السوق: {market_analysis['market_phase']}")
+    
+        return df
+
+# ثم استبدل السطر في enhanced_analysis_v4:
+# df = self.generate_enhanced_signals_v4(df)
+# بـ:
+# df = self.generate_ultra_smart_signals_v4_3(df)
     
     def generate_enhanced_signals_v4(self, df: pd.DataFrame) -> pd.DataFrame:
         """إشارات محسنة v4 مع إعادة تصميم جذرية لشروط البيع"""
@@ -1101,7 +1208,8 @@ class EnhancedEmaRsiMacdStrategyV4:
         df = self.risk_adjusted_scoring_v4(df)
         
         # 8. إشارات محسنة
-        df = self.generate_enhanced_signals_v4(df)
+        df = self.generate_ultra_smart_signals_v4_3(df)
+        
         
         # حفظ نتائج التحليل
         self.analysis_results = df.to_dict('records')
@@ -1968,6 +2076,8 @@ class ExtendedDataFetcher:
         except Exception as e:
             logger.error(f"❌ خطأ غير متوقع: {e}")
             return pd.DataFrame()
+
+
 
 # =============================================================================
 # الوظيفة الرئيسية المحدثة
