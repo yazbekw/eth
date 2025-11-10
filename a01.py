@@ -960,8 +960,34 @@ class EnhancedEmaRsiMacdStrategyV4:
 
     # أضف هذه الدالة داخل class EnhancedEmaRsiMacdStrategyV4:
 
+    
     def generate_ultra_smart_signals_v4_3(self, df: pd.DataFrame) -> pd.DataFrame:
-        """إشارات ذكية فائقة v4.3 مع تفعيل البيع"""
+        """إشارات ذكية فائقة v4.3 مع تفعيل البيع وإنشاء current_volatility"""
+    
+        # ✅ التصحيح: إنشاء current_volatility إذا لم يكن موجوداً
+        if 'current_volatility' not in df.columns:
+            if 'atr_percent' in df.columns:
+                df['current_volatility'] = df['atr_percent'].fillna(0.02)
+            else:
+                # إنشاء atr_percent بسيط
+                df['tr'] = np.maximum(
+                    df['high'] - df['low'],
+                    np.maximum(
+                        abs(df['high'] - df['close'].shift(1)),
+                        abs(df['low'] - df['close'].shift(1))
+                    )
+                )
+                df['atr'] = df['tr'].rolling(14).mean().fillna(0.02)
+                df['atr_percent'] = (df['atr'] / df['close']).fillna(0.02)
+                df['current_volatility'] = df['atr_percent']
+    
+        # ✅ التصحيح: إنشاء signal_strength إذا لم يكن موجوداً
+        if 'signal_strength' not in df.columns:
+            df['signal_strength'] = df['score_v4'] / 100.0
+    
+        # ✅ التصحيح: إنشاء signal_quality إذا لم يكن موجوداً
+        if 'signal_quality' not in df.columns:
+            df['signal_quality'] = 'STANDARD'
     
         # التحليل الذكي للسوق
         market_analysis = self.analyze_market_conditions_v4_2(df)
@@ -969,7 +995,7 @@ class EnhancedEmaRsiMacdStrategyV4:
         # 1. الشروط الأساسية للشراء (محسنة)
         buy_condition = (
             (df['score_v4'] >= CONFIDENCE_THRESHOLD) &
-            (df['filter_pass_buy'] == True) &
+            (df.get('filter_pass_buy', True) == True) &  # ✅ التصحيح: استخدام get
             (df['rsi'] >= 35) & (df['rsi'] <= 65) &
             (df['macd_histogram'] > -0.001) &  # تخفيف الشرط
             (df['close'] > df['ema_21']) &
