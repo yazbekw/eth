@@ -12,7 +12,7 @@ warnings.filterwarnings('ignore')
 # إعدادات التداول
 TRADE_CONFIG = {
     'symbol': 'BTCUSDT',
-    'timeframe': '1h',
+    'timeframe': '15m',
     'initial_balance': 1000,
     'leverage': 3,
     'stop_loss': 0.03,    # 2.5% - زيادة من 2%
