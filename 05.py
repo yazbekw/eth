@@ -15,9 +15,9 @@ TRADE_CONFIG = {
     'timeframe': '1h',
     'initial_balance': 1000,
     'leverage': 3,
-    'stop_loss': 0.035,     # 3.5% - زيادة من 3%
-    'take_profit': 0.05,    # 5% - زيادة من 4.5%
-    'position_size': 0.08,  # 8% - تقليل من 10%
+    'stop_loss': 0.04,     # 3.5% - زيادة من 3%
+    'take_profit': 0.055,    # 5% - زيادة من 4.5%
+    'position_size': 0.07,  # 8% - تقليل من 10%
     'max_positions': 3,
     'paper_trading': True   # تفعيل التداول الورقي
 }
