@@ -14,8 +14,8 @@ TRADE_CONFIG = {
     'timeframe': '1h',
     'initial_balance': 200,
     'leverage': 1,
-    'stop_loss': 0.1,
-    'take_profit': 0.1,
+    'stop_loss': 0.025,
+    'take_profit': 0.05,
     'position_size': 0.1,
     'max_positions': 3,
     'paper_trading': True
