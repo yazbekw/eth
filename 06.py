@@ -8,6 +8,7 @@ import warnings
 warnings.filterwarnings('ignore')
 
 # ==================== الإعدادات الأساسية ====================
+
 TRADE_CONFIG = {
     'symbol': 'BNBUSDT',
     'timeframe': '1h',
@@ -39,6 +40,12 @@ SIGNAL_CONFIG = {
     'min_volume_ratio': 0.8
 }
 
+# إعدادات التلغرام - تأكد من تعبئتها في Render
+TELEGRAM_CONFIG = {
+    'bot_token': os.getenv('TELEGRAM_BOT_TOKEN', ''),
+    'chat_id': os.getenv('TELEGRAM_CHAT_ID', '')
+}
+
 class SimpleCryptoBot:
     def __init__(self, trade_config, indicator_config, signal_config):
         self.trade_config = trade_config
@@ -51,48 +58,29 @@ class SimpleCryptoBot:
         self.initial_balance = trade_config['initial_balance']
         self.paper_trading = trade_config.get('paper_trading', True)
         
-    def fetch_binance_data(self, days=180):  # 👈 تغيير افتراضي إلى 180
+    # ... جميع الدوال السابقة تبقى كما هي ...
+    def fetch_binance_data(self, days=180):
         """جلب البيانات من Binance لمدة 6 أشهر"""
         try:
             symbol = self.trade_config['symbol']
             interval = self.trade_config['timeframe']
             
-            # حساب التاريخ بدقة
             end_date = datetime.now()
             start_date = end_date - timedelta(days=days)
             
             print(f"📅 جلب بيانات {days} يوم من {start_date.date()} إلى {end_date.date()}")
             
-            # Binance يحتاج timestamp بالمللي ثانية
-            start_ts = int(start_date.timestamp() * 1000)
-            end_ts = int(end_date.timestamp() * 1000)
-            
             url = "https://api.binance.com/api/v3/klines"
             params = {
                 'symbol': symbol,
                 'interval': interval,
-                'startTime': start_ts,
-                'endTime': end_ts,
-                'limit': 1000
+                'limit': days * 24
             }
             
-            all_data = []
-            while True:
-                response = requests.get(url, params=params, timeout=10)
-                data = response.json()
-                
-                if not data:
-                    break
-                    
-                all_data.extend(data)
-                
-                # التالي للشموع التالية
-                params['startTime'] = data[-1][0] + 1
-                
-                if params['startTime'] > end_ts:
-                    break
+            response = requests.get(url, params=params, timeout=15)
+            data = response.json()
             
-            df = pd.DataFrame(all_data, columns=[
+            df = pd.DataFrame(data, columns=[
                 'timestamp', 'open', 'high', 'low', 'close', 'volume',
                 'close_time', 'quote_asset_volume', 'number_of_trades',
                 'taker_buy_base_asset_volume', 'taker_buy_quote_asset_volume', 'ignore'
@@ -142,9 +130,9 @@ class SimpleCryptoBot:
         
         self.calculate_indicators()
     
-    # ... باقي الدوال نفسها بدون تغيير ...
     def calculate_indicators(self):
         """حساب المؤشرات الفنية"""
+        # RSI
         delta = self.data['close'].diff()
         gain = delta.where(delta > 0, 0.0)
         loss = -delta.where(delta < 0, 0.0)
@@ -154,19 +142,22 @@ class SimpleCryptoBot:
         rs = avg_gain / avg_loss
         self.data['rsi'] = 100 - (100 / (1 + rs))
         
+        # المتوسطات المتحركة
         self.data['ema_fast'] = self.data['close'].ewm(span=self.indicator_config['ema_fast'], adjust=False).mean()
         self.data['ema_slow'] = self.data['close'].ewm(span=self.indicator_config['ema_slow'], adjust=False).mean()
         self.data['ema_trend'] = self.data['close'].ewm(span=self.indicator_config['ema_trend'], adjust=False).mean()
         
+        # MACD
         ema_fast = self.data['close'].ewm(span=self.indicator_config['macd_fast'], adjust=False).mean()
         ema_slow = self.data['close'].ewm(span=self.indicator_config['macd_slow'], adjust=False).mean()
         self.data['macd'] = ema_fast - ema_slow
         self.data['macd_signal'] = self.data['macd'].ewm(span=self.indicator_config['macd_signal'], adjust=False).mean()
         
+        # حجم التداول المتوسط
         self.data['volume_ma'] = self.data['volume'].rolling(window=20).mean()
         
         print("✅ تم حساب المؤشرات الفنية")
-
+    
     def generate_signal(self, row):
         """توليد إشارات التداول"""
         if any(pd.isna(row[key]) for key in ['rsi', 'ema_slow', 'macd', 'ema_trend', 'volume_ma']):
@@ -216,7 +207,7 @@ class SimpleCryptoBot:
             strength = sell_conditions
         
         return signal, strength
-
+    
     def execute_backtest(self):
         """تنفيذ الباك تستينغ"""
         print("🔄 بدء الباك تستينغ...")
@@ -243,7 +234,7 @@ class SimpleCryptoBot:
                 self.open_position(signal, row)
         
         print(f"✅ تم الانتهاء - {len(self.trades)} صفقة")
-
+    
     def open_position(self, direction, row):
         """فتح صفقة جديدة"""
         position_size = self.current_balance * self.trade_config['position_size'] * self.trade_config['leverage']
@@ -270,7 +261,7 @@ class SimpleCryptoBot:
         self.positions.append(position)
         trade_type = "ورقي" if self.paper_trading else "حقيقي"
         print(f"📈 فتح صفقة {trade_type} {direction} #{position['id']} بسعر {row['close']:.2f}")
-
+    
     def check_exit_conditions(self, row):
         """فحص شروط الخروج"""
         current_price = float(row['close'])
@@ -315,7 +306,7 @@ class SimpleCryptoBot:
                     trade_type = "ورقي" if self.paper_trading else "حقيقي"
                     reason_text = f"{reason} {loss_reason}" if loss_reason else reason
                     print(f"{emoji} إغلاق صفقة {trade_type} {position['direction']} #{position['id']} - {reason_text} - {pnl_percent:+.2f}%")
-
+    
     def analyze_loss_reason(self, position, row):
         """تحليل أسباب الخسارة"""
         reasons = []
@@ -344,7 +335,7 @@ class SimpleCryptoBot:
                 reasons.append("حجم تداول منخفض")
         
         return ", ".join(reasons) if reasons else "لا يوجد سبب واضح"
-
+    
     def generate_report(self):
         """توليد تقرير الأداء"""
         if not self.trades:
@@ -398,7 +389,7 @@ class SimpleCryptoBot:
         """
         
         return report
-
+    
     def analyze_loss_patterns(self, losing_trades):
         """تحليل أنماط الخسارة"""
         if not losing_trades:
@@ -428,11 +419,8 @@ class SimpleCryptoBot:
         if stop_loss_count / len(losing_trades) > 0.7:
             analysis += "\nتوصية: معظم الخسائر بسبب وقف الخسارة -可以考虑 زيادة وقف الخسارة قليلاً\n"
         
-        if common_reasons.get("حجم تداول منخفض", 0) > len(losing_trades) * 0.3:
-            analysis += "توصية: العديد من الخسائر بحجم تداول منخفض - تحقق من إشارات الدخول\n"
-        
         return analysis
-
+    
     def calculate_avg_trade_duration(self, trades):
         """حساب متوسط مدة الصفقات"""
         if not trades:
@@ -445,16 +433,58 @@ class SimpleCryptoBot:
                 durations.append(duration)
         
         return f"{float(np.mean(durations)):.1f} ساعة" if durations else "غير متوفر"
+    
+    def send_telegram_report(self):
+        """إرسال التقرير عبر التلغرام - الإصدار المعدل"""
+        try:
+            bot_token = TELEGRAM_CONFIG['bot_token']
+            chat_id = TELEGRAM_CONFIG['chat_id']
+            
+            if not bot_token or not chat_id:
+                print("❌ مفاتيح التلغرام غير متوفرة")
+                print("يرجى تعيين TELEGRAM_BOT_TOKEN و TELEGRAM_CHAT_ID في متغيرات البيئة")
+                return
+            
+            print(f"🔍 التحقق من مفاتيح التلغرام...")
+            print(f"البوت Token: {'***' + bot_token[-4:] if bot_token else 'غير موجود'}")
+            print(f"الدردشة ID: {chat_id if chat_id else 'غير موجود'}")
+            
+            bot = telebot.TeleBot(bot_token)
+            report = self.generate_report()
+            
+            # تقسيم التقرير إذا كان طويلاً
+            if len(report) > 4000:
+                parts = [report[i:i+4000] for i in range(0, len(report), 4000)]
+                for i, part in enumerate(parts):
+                    bot.send_message(chat_id, f"الجزء {i+1}:\n{part}")
+                    print(f"✅ تم إرسال الجزء {i+1} إلى التلغرام")
+            else:
+                bot.send_message(chat_id, report)
+                print("✅ تم إرسال التقرير إلى التلغرام بنجاح")
+                
+        except Exception as e:
+            print(f"❌ خطأ في إرسال التقرير إلى التلغرام: {e}")
+            print("تفاصيل الخطأ:", str(e))
 
 def main():
     print("🚀 بدء تشغيل البوت لـ 180 يوم...")
     
+    # التحقق من وجود مفاتيح التلغرام
+    if not TELEGRAM_CONFIG['bot_token'] or not TELEGRAM_CONFIG['chat_id']:
+        print("⚠️  تنبيه: مفاتيح التلغرام غير متوفرة")
+        print("يرجى تعيين القيم التالية في Render:")
+        print("TELEGRAM_BOT_TOKEN=رقم_توكن_البوت")
+        print("TELEGRAM_CHAT_ID=رقم_الدردشة")
+    
     bot = SimpleCryptoBot(TRADE_CONFIG, INDICATOR_CONFIG, SIGNAL_CONFIG)
-    bot.fetch_binance_data(days=180)  # 👈 180 يوم
+    bot.fetch_binance_data(days=180)
     bot.execute_backtest()
     
     report = bot.generate_report()
     print(report)
+    
+    # إرسال التقرير إلى التلغرام
+    bot.send_telegram_report()
     
     print("✅ انتهى التشغيل")
 
