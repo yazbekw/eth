@@ -15,8 +15,8 @@ TRADE_CONFIG = {
     'timeframe': '1h',
     'initial_balance': 1000,
     'leverage': 3,
-    'stop_loss': 0.025,    # 2.5% - زيادة من 2%
-    'take_profit': 0.035,  # 3.5% - تقليل من 4% لتحسين نسبة R:R
+    'stop_loss': 0.03,    # 2.5% - زيادة من 2%
+    'take_profit': 0.045,  # 3.5% - تقليل من 4% لتحسين نسبة R:R
     'position_size': 0.07,  # 7% - تقليل من 10%
     'max_positions': 3
 }
@@ -36,8 +36,8 @@ INDICATOR_CONFIG = {
 
 # إعدادات الإشارات
 SIGNAL_CONFIG = {
-    'min_conditions': 2,    # زيادة من 2 إلى 3 شروط
-    'use_trend_filter': False,
+    'min_conditions': 3,    # زيادة من 2 إلى 3 شروط
+    'use_trend_filter': True,
     'use_volume_filter': False  # يمكن تفعيله لاحقاً
 }
 
