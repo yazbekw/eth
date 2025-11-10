@@ -39,8 +39,8 @@ SIGNAL_CONFIG = {
     'min_conditions': 3,       # زيادة إلى 4 شروط
     'use_trend_filter': True,
     'use_volume_filter': True,
-    'min_volume_ratio': 1.1,   # زيادة عتبة الحجم
-    'require_trend_confirmation': True,
+    'min_volume_ratio': 1,   # زيادة عتبة الحجم
+    'require_trend_confirmation': False,
     'prevent_conflicts': True,
     'min_signal_strength': 4   # حد أدنى لقوة الإشارة
 }
