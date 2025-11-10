@@ -36,7 +36,7 @@ INDICATOR_CONFIG = {
 
 SIGNAL_CONFIG = {
     'min_conditions': 2,
-    'use_trend_filter': False,
+    'use_trend_filter': True,
     'use_volume_filter': False,
     'min_volume_ratio': 0.8
 }
@@ -170,55 +170,106 @@ class FuturesTradingBot:
         return liquidation_price
     
     def generate_signal(self, row):
-        """توليد إشارات التداول للعقود الآجلة"""
-        if any(pd.isna(row[key]) for key in ['rsi', 'ema_slow', 'macd', 'ema_trend', 'volume_ma']):
+        """توليد إشارات التداول - نسخة محسنة للعقود الآجلة"""
+        # التحقق من وجود جميع البيانات المطلوبة
+        required_indicators = ['rsi', 'ema_fast', 'ema_slow', 'macd', 'macd_signal', 'ema_trend']
+        if any(pd.isna(row[key]) for key in required_indicators):
             return 'HOLD', 0
-        
+    
         long_conditions = 0
         short_conditions = 0
-        
-        # شروط الشراء (LONG)
+    
+        # ==================== شروط الشراء (LONG) ====================
+    
+        # 1. شرط RSI - مناطق ذروة البيع
         if row['rsi'] < self.indicator_config['rsi_oversold']:
             long_conditions += 1
+            print(f"   ✅ RSI {row['rsi']:.1f} - منطقة ذروة البيع")
+        elif row['rsi'] < 45:  # منطقة محايدة سفلى
+            long_conditions += 0.5
+    
+        # 2. شرط المتوسطات - تقاطع صاعد
         if row['ema_fast'] > row['ema_slow']:
             long_conditions += 1
+            print(f"   ✅ EMA سريع {row['ema_fast']:.1f} > بطيء {row['ema_slow']:.1f}")
+        elif (row['ema_fast'] - row['ema_slow']) > - (row['ema_slow'] * 0.001):  # قريب من التقاطع
+            long_conditions += 0.5
+    
+        # 3. شرط MACD - إيجابي وقوي
         if row['macd'] > row['macd_signal']:
             long_conditions += 1
-        
-        # شروط البيع (SHORT)
+            macd_strength = (row['macd'] - row['macd_signal']) / row['close'] * 1000
+            print(f"   ✅ MACD {row['macd']:.4f} > الإشارة {row['macd_signal']:.4f} (قوة: {macd_strength:.2f})")
+            if abs(macd_strength) > 0.5:  # إشارة قوية
+                long_conditions += 0.5
+        elif row['macd'] > row['macd_signal'] * 0.95:  # قريب من التقاطع
+            long_conditions += 0.5
+    
+        # 4. شرط الاتجاه العام
+        if row['close'] > row['ema_trend']:
+            long_conditions += 1
+            print(f"   ✅ السعر {row['close']:.1f} > المتوسط {row['ema_trend']:.1f}")
+        elif (row['close'] - row['ema_trend']) > - (row['ema_trend'] * 0.005):  # قريب من المتوسط
+            long_conditions += 0.5
+    
+        # ==================== شروط البيع (SHORT) ====================
+    
+        # 1. شرط RSI - مناطق ذروة الشراء
         if row['rsi'] > self.indicator_config['rsi_overbought']:
             short_conditions += 1
+            print(f"   ✅ RSI {row['rsi']:.1f} - منطقة ذروة الشراء")
+        elif row['rsi'] > 55:  # منطقة محايدة عليا
+            short_conditions += 0.5
+    
+        # 2. شرط المتوسطات - تقاطع هابط
         if row['ema_fast'] < row['ema_slow']:
             short_conditions += 1
+            print(f"   ✅ EMA سريع {row['ema_fast']:.1f} < بطيء {row['ema_slow']:.1f}")
+        elif (row['ema_slow'] - row['ema_fast']) > - (row['ema_fast'] * 0.001):  # قريب من التقاطع
+            short_conditions += 0.5
+    
+        # 3. شرط MACD - سلبي وقوي
         if row['macd'] < row['macd_signal']:
             short_conditions += 1
-        
-        # تصفية الاتجاه
-        if self.signal_config['use_trend_filter']:
-            if row['close'] > row['ema_trend']:
-                long_conditions += 0.5
-            else:
+            macd_strength = (row['macd_signal'] - row['macd']) / row['close'] * 1000
+            print(f"   ✅ MACD {row['macd']:.4f} < الإشارة {row['macd_signal']:.4f} (قوة: {macd_strength:.2f})")
+            if abs(macd_strength) > 0.5:  # إشارة قوية
                 short_conditions += 0.5
-        
-        # تصفية الحجم
-        if self.signal_config['use_volume_filter']:
-            volume_confirm = row['volume'] > row['volume_ma'] * self.signal_config['min_volume_ratio']
-            if volume_confirm:
-                long_conditions += 0.5
-                short_conditions += 0.5
-        
+        elif row['macd'] < row['macd_signal'] * 1.05:  # قريب من التقاطع
+            short_conditions += 0.5
+    
+        # 4. شرط الاتجاه العام
+        if row['close'] < row['ema_trend']:
+            short_conditions += 1
+            print(f"   ✅ السعر {row['close']:.1f} < المتوسط {row['ema_trend']:.1f}")
+        elif (row['ema_trend'] - row['close']) > - (row['close'] * 0.005):  # قريب من المتوسط
+            short_conditions += 0.5
+    
+        # ==================== قرار التداول ====================
+    
         signal = 'HOLD'
         strength = 0
-        
         min_conditions = self.signal_config['min_conditions']
-        
+    
+        # تسجيل معلومات التصحيح
+        debug_info = f"   🔍 LONG: {long_conditions:.1f}/4 | SHORT: {short_conditions:.1f}/4"
+    
+        # قرار الدخول في صفقة LONG
         if long_conditions >= min_conditions:
             signal = 'LONG'
             strength = long_conditions
+            print(f"🎯 إشارة شراء - {debug_info}")
+    
+        # قرار الدخول في صفقة SHORT
         elif short_conditions >= min_conditions:
             signal = 'SHORT'
             strength = short_conditions
-        
+            print(f"🎯 إشارة بيع - {debug_info}")
+    
+        # إذا كانت هناك إشارة ولكنها ضعيفة
+        elif long_conditions >= (min_conditions - 0.5) or short_conditions >= (min_conditions - 0.5):
+            print(f"⚠️  إشارة ضعيفة - {debug_info}")
+    
         return signal, strength
     
     def execute_backtest(self):
