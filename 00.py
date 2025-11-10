@@ -9,7 +9,7 @@ warnings.filterwarnings('ignore')
 
 # ==================== إعدادات الاستراتيجية الأساسية ====================
 STRATEGY_CONFIG = {
-    'symbol': 'BTCUSDT',
+    'symbol': 'BNBUSDT',
     'timeframe': '1h',
     'initial_balance': 1000,
     'leverage': 3,
