@@ -11,7 +11,7 @@ warnings.filterwarnings('ignore')
 
 # إعدادات التداول
 TRADE_CONFIG = {
-    'symbol': 'ETHUSDT',
+    'symbol': 'ADAUSDT',
     'timeframe': '1h',
     'initial_balance': 1000,
     'leverage': 3,
