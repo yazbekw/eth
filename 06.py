@@ -15,7 +15,7 @@ TRADE_CONFIG = {
     'initial_balance': 200,
     'leverage': 1,
     'stop_loss': 0.02,
-    'take_profit': 0.05,
+    'take_profit': 0.04,
     'position_size': 0.1,
     'max_positions': 3,
     'paper_trading': True
