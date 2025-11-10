@@ -23,9 +23,9 @@ TRADE_CONFIG = {
 }
 
 INDICATOR_CONFIG = {
-    'rsi_period': 21,
-    'rsi_overbought': 70,
-    'rsi_oversold': 30,
+    'rsi_period': 14,
+    'rsi_overbought': 65,
+    'rsi_oversold': 35,
     'ema_fast': 9,
     'ema_slow': 21,
     'ema_trend': 50,
