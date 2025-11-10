@@ -11,7 +11,7 @@ warnings.filterwarnings('ignore')
 
 # إعدادات التداول
 TRADE_CONFIG = {
-    'symbol': 'BNBUSDT',
+    'symbol': 'ETHUSDT',
     'timeframe': '1h',
     'initial_balance': 1000,
     'leverage': 3,
