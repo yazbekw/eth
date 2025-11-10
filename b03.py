@@ -28,10 +28,10 @@ LEVERAGE = int(os.getenv("LEVERAGE", "10"))
 INITIAL_BALANCE = float(os.getenv("INITIAL_BALANCE", "5000.0"))
 
 # عتبات محسنة ومتوازنة للبيع والشراء
-BUY_CONFIDENCE_THRESHOLD = int(os.getenv("BUY_CONFIDENCE_THRESHOLD", "65"))  # مخفضة
-SELL_CONFIDENCE_THRESHOLD = int(os.getenv("SELL_CONFIDENCE_THRESHOLD", "62"))  # مخفضة بشكل كبير
-SELL_PREMIUM_THRESHOLD = int(os.getenv("SELL_PREMIUM_THRESHOLD", "68"))  # مخفضة
-SELL_QUALITY_THRESHOLD = int(os.getenv("SELL_QUALITY_THRESHOLD", "58"))  # مخفضة بشكل كبير
+BUY_CONFIDENCE_THRESHOLD = int(os.getenv("BUY_CONFIDENCE_THRESHOLD", "70"))  # مخفضة
+SELL_CONFIDENCE_THRESHOLD = int(os.getenv("SELL_CONFIDENCE_THRESHOLD", "70"))  # مخفضة بشكل كبير
+SELL_PREMIUM_THRESHOLD = int(os.getenv("SELL_PREMIUM_THRESHOLD", "70"))  # مخفضة
+SELL_QUALITY_THRESHOLD = int(os.getenv("SELL_QUALITY_THRESHOLD", "70"))  # مخفضة بشكل كبير
 
 # إعدادات مدة الاختبار
 DATA_LIMIT = int(os.getenv("DATA_LIMIT", "1000"))
