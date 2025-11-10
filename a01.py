@@ -1463,7 +1463,7 @@ class EnhancedEmaRsiMacdStrategyV4:
             improvement_suggestions.append("مراجعة نظام التقييم للإشارات عالية الثقة")
         
         if len(high_vol_losses) > len(losing_trades) * 0.5:  # أكثر من 50% خسائر بسبب التقلبات
-            improvement_suggestions.appendتجنب التداول في فترات التقلبات العالية")
+            improvement_suggestions.append("تجنب التداول في فترات التقلبات العالية")
         
         # اقتراحات عامة
         avg_loss = losing_trades['pnl'].mean()
