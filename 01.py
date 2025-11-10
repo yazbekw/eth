@@ -36,9 +36,9 @@ INDICATOR_CONFIG = {
 
 # إعدادات الإشارات
 SIGNAL_CONFIG = {
-    'min_conditions': 3,    # زيادة من 2 إلى 3 شروط
+    'min_conditions': 2,    # زيادة من 2 إلى 3 شروط
     'use_trend_filter': False,
-    'use_volume_filter': True  # يمكن تفعيله لاحقاً
+    'use_volume_filter': False  # يمكن تفعيله لاحقاً
 }
 
 # إعدادات التلغرام
