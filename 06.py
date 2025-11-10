@@ -37,7 +37,7 @@ SIGNAL_CONFIG = {
     'min_conditions': 2,
     'use_trend_filter': True,
     'use_volume_filter': True,
-    'min_volume_ratio': 0.8
+    'min_volume_ratio': 0.9
 }
 
 # إعدادات التلغرام - تأكد من تعبئتها في Render
@@ -477,7 +477,7 @@ def main():
         print("TELEGRAM_CHAT_ID=رقم_الدردشة")
     
     bot = SimpleCryptoBot(TRADE_CONFIG, INDICATOR_CONFIG, SIGNAL_CONFIG)
-    bot.fetch_binance_data(days=180)
+    bot.fetch_binance_data(days=30)
     bot.execute_backtest()
     
     report = bot.generate_report()
