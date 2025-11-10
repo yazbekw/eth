@@ -42,7 +42,7 @@ SIGNAL_CONFIG = {
     'min_volume_ratio': 1,   # زيادة عتبة الحجم
     'require_trend_confirmation': False,
     'prevent_conflicts': True,
-    'min_signal_strength': 4   # حد أدنى لقوة الإشارة
+    'min_signal_strength': 3   # حد أدنى لقوة الإشارة
 }
 
 TELEGRAM_CONFIG = {
