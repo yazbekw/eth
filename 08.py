@@ -23,9 +23,9 @@ TRADE_CONFIG = {
 }
 
 INDICATOR_CONFIG = {
-    'rsi_period': 14,
-    'rsi_overbought': 65,
-    'rsi_oversold': 35,
+    'rsi_period': 21,
+    'rsi_overbought': 70,
+    'rsi_oversold': 30,
     'ema_fast': 9,
     'ema_slow': 21,
     'ema_trend': 50,
@@ -38,7 +38,7 @@ SIGNAL_CONFIG = {
     'min_conditions': 2,
     'use_trend_filter': True,
     'use_volume_filter': True,
-    'min_volume_ratio': 0.8
+    'min_volume_ratio': 0.9
 }
 
 TELEGRAM_CONFIG = {
