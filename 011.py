@@ -20,7 +20,7 @@ TRADE_CONFIG = {
     'max_positions': 3,        # صفقتين في الوقت
     'paper_trading': True,
     'use_trailing_stop': True,
-    'max_trade_duration': 40
+    'max_trade_duration': 60
 }
 
 INDICATOR_CONFIG = {
