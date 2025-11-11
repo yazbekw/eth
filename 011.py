@@ -13,7 +13,7 @@ TRADE_CONFIG = {
     'symbol': 'BNBUSDT',
     'timeframe': '4h',
     'initial_balance': 200,
-    'leverag': 1,
+    'lerverag': 1,
     'stop_loss': 0.05,        # تخفيف إلى 2.0%
     'take_profit': 0.05,      # تخفيف إلى 4.0%
     'position_size': 0.1,
