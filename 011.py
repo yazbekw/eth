@@ -36,13 +36,13 @@ INDICATOR_CONFIG = {
 }
 
 SIGNAL_CONFIG = {
-    'min_conditions': 3,       # تخفيف إلى 3 شروط
+    'min_conditions': 4,       # تخفيف إلى 3 شروط
     'use_trend_filter': True,
     'use_volume_filter': True,
     'min_volume_ratio': 1.0,   # تخفيف عتبة الحجم
     'require_trend_confirmation': False,
     'prevent_conflicts': True,
-    'min_signal_strength': 3   # تخفيف إلى 3
+    'min_signal_strength': 3.5   # تخفيف إلى 3
 }
 
 TELEGRAM_CONFIG = {
