@@ -14,8 +14,8 @@ TRADE_CONFIG = {
     'timeframe': '1h',
     'initial_balance': 200,
     'leverage': 1,
-    'stop_loss': 0.025,        # تخفيف إلى 2.0%
-    'take_profit': 0.040,      # تخفيف إلى 4.0%
+    'stop_loss': 0.05,        # تخفيف إلى 2.0%
+    'take_profit': 0.05,      # تخفيف إلى 4.0%
     'position_size': 0.08,
     'max_positions': 3,        # صفقتين في الوقت
     'paper_trading': True,
@@ -24,7 +24,7 @@ TRADE_CONFIG = {
 }
 
 INDICATOR_CONFIG = {
-    'rsi_period': 14,
+    'rsi_period': 21,
     'rsi_overbought': 70,
     'rsi_oversold': 30,
     'ema_fast': 9,
@@ -40,9 +40,9 @@ SIGNAL_CONFIG = {
     'use_trend_filter': True,
     'use_volume_filter': True,
     'min_volume_ratio': 1.0,   # تخفيف عتبة الحجم
-    'require_trend_confirmation': False,
+    'require_trend_confirmation': True,
     'prevent_conflicts': True,
-    'min_signal_strength': 3.5   # تخفيف إلى 3
+    'min_signal_strength': 3   # تخفيف إلى 3
 }
 
 TELEGRAM_CONFIG = {
