@@ -17,7 +17,7 @@ TRADE_CONFIG = {
     'stop_loss': 0.025,        # تخفيف إلى 2.0%
     'take_profit': 0.060,      # تخفيف إلى 4.0%
     'position_size': 0.1,
-    'max_positions': 4,        # صفقتين في الوقت
+    'max_positions': 3,        # صفقتين في الوقت
     'paper_trading': True,
     'use_trailing_stop': True,
     'max_trade_duration': 60
@@ -42,8 +42,8 @@ SIGNAL_CONFIG = {
     'min_volume_ratio': 1.0,   # تخفيف عتبة الحجم
     'require_trend_confirmation': True,
     'prevent_conflicts': True,
-    'min_signal_strength': 5,  # تخفيف إلى 5
-    'max_signal_strength': 5   # إضافة الحد الأقصى لقوة الإشارة
+    'min_signal_strength': 1,  # تخفيف إلى 5
+    'max_signal_strength': 10   # إضافة الحد الأقصى لقوة الإشارة
 }
 
 TELEGRAM_CONFIG = {
