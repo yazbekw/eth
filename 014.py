@@ -17,7 +17,7 @@ TRADE_CONFIG = {
     'stop_loss': 0.025,
     'take_profit': 0.060,
     'position_size': 0.1,
-    'max_positions': 3,
+    'max_positions': 4,
     'paper_trading': True,
     'use_trailing_stop': True,
     'max_trade_duration': 60
