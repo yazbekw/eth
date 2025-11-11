@@ -14,7 +14,7 @@ TRADE_CONFIG = {
     'timeframe': '4h',
     'initial_balance': 200,
     'leverage': 1,
-    'stop_loss': 0.035,        # تخفيف إلى 2.0%
+    'stop_loss': 0.02,        # تخفيف إلى 2.0%
     'take_profit': 0.060,      # تخفيف إلى 4.0%
     'position_size': 0.1,
     'max_positions': 4,        # صفقتين في الوقت
