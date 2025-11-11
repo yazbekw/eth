@@ -11,7 +11,7 @@ warnings.filterwarnings('ignore')
 
 TRADE_CONFIG = {
     'symbol': 'BNBUSDT',
-    'timeframe': '1h',
+    'timeframe': '15m',
     'initial_balance': 200,
     'leverage': 1,
     'stop_loss': 0.03,        # تخفيف إلى 2.0%
