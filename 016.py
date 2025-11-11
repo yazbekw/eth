@@ -14,7 +14,7 @@ TRADE_CONFIG = {
     'timeframe': '4h',
     'initial_balance': 200,
     'leverage': 1,
-    'stop_loss': 0.02,        # تخفيف إلى 2.0%
+    'stop_loss': 0.025,        # تخفيف إلى 2.0%
     'take_profit': 0.060,      # تخفيف إلى 4.0%
     'position_size': 0.1,
     'max_positions': 4,        # صفقتين في الوقت
@@ -24,7 +24,7 @@ TRADE_CONFIG = {
 }
 
 INDICATOR_CONFIG = {
-    'rsi_period': 14,
+    'rsi_period': 21,
     'rsi_overbought': 70,
     'rsi_oversold': 30,
     'ema_fast': 9,
