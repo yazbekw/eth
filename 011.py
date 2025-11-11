@@ -24,7 +24,7 @@ TRADE_CONFIG = {
 }
 
 INDICATOR_CONFIG = {
-    'rsi_period': 14,
+    'rsi_period': 21,
     'rsi_overbought': 70,
     'rsi_oversold': 30,
     'ema_fast': 9,
@@ -37,12 +37,12 @@ INDICATOR_CONFIG = {
 
 SIGNAL_CONFIG = {
     'min_conditions': 3,       # تخفيف إلى 3 شروط
-    'use_trend_filter': False,
+    'use_trend_filter': True,
     'use_volume_filter': True,
     'min_volume_ratio': 1.1,   # تخفيف عتبة الحجم
     'require_trend_confirmation': True,
     'prevent_conflicts': True,
-    'min_signal_strength': 3.5   # تخفيف إلى 3
+    'min_signal_strength': 3   # تخفيف إلى 3
 }
 
 TELEGRAM_CONFIG = {
