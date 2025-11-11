@@ -15,12 +15,12 @@ TRADE_CONFIG = {
     'initial_balance': 200,
     'leverage': 1,
     'stop_loss': 0.03,        # تخفيف إلى 2.0%
-    'take_profit': 0.05,      # تخفيف إلى 4.0%
+    'take_profit': 0.06,      # تخفيف إلى 4.0%
     'position_size': 0.1,
     'max_positions': 3,        # صفقتين في الوقت
     'paper_trading': True,
     'use_trailing_stop': True,
-    'max_trade_duration': 20
+    'max_trade_duration': 40
 }
 
 INDICATOR_CONFIG = {
