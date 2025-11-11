@@ -37,7 +37,7 @@ INDICATOR_CONFIG = {
 
 SIGNAL_CONFIG = {
     'min_conditions': 3,       # تخفيف إلى 3 شروط
-    'use_trend_filter': True,
+    'use_trend_filter': False,
     'use_volume_filter': True,
     'min_volume_ratio': 1.1,   # تخفيف عتبة الحجم
     'require_trend_confirmation': True,
