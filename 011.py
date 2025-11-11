@@ -14,17 +14,17 @@ TRADE_CONFIG = {
     'timeframe': '1h',
     'initial_balance': 200,
     'leverage': 1,
-    'stop_loss': 0.020,        # تخفيف إلى 2.0%
+    'stop_loss': 0.025,        # تخفيف إلى 2.0%
     'take_profit': 0.040,      # تخفيف إلى 4.0%
     'position_size': 0.08,
-    'max_positions': 2,        # صفقتين في الوقت
+    'max_positions': 3,        # صفقتين في الوقت
     'paper_trading': True,
     'use_trailing_stop': True,
     'max_trade_duration': 60
 }
 
 INDICATOR_CONFIG = {
-    'rsi_period': 14,
+    'rsi_period': 21,
     'rsi_overbought': 70,
     'rsi_oversold': 30,
     'ema_fast': 9,
