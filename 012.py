@@ -15,7 +15,7 @@ TRADE_CONFIG = {
     'initial_balance': 200,
     'leverage': 1,
     'stop_loss': 0.050,        # تخفيف إلى 2.0%
-    'take_profit': 0.040,      # تخفيف إلى 4.0%
+    'take_profit': 0.050,      # تخفيف إلى 4.0%
     'position_size': 0.1,
     'max_positions': 3,        # صفقتين في الوقت
     'paper_trading': True,
