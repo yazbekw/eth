@@ -222,7 +222,7 @@ class AdvancedCryptoBot:
         return False
 
     @retry(stop=stop_after_attempt(3), wait=wait_exponential(multiplier=1, max=10))
-    def fetch_binance_data(self, days=60):
+    def fetch_binance_data(self, symbol, days=60):
         """جلب البيانات من Binance"""
         try:
             symbol = self.trade_config['symbol']
@@ -243,7 +243,7 @@ class AdvancedCryptoBot:
                     'limit': min(limit, required_candles - len(all_data)),
                     'endTime': end_time
                 }
-                response = requests.get("https://api.binance.com/api/v3/klines", params=params, timeout=15)
+                response = requests.get("https://testnet.binance.vision/api/v3/klines", params=params, timeout=15)
                 response.raise_for_status()
                 data = response.json()
                 if not data or len(data) == 0:
