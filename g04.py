@@ -713,6 +713,227 @@ class AdvancedCryptoBot:
 
         return report
 
+        def generate_report(self):
+        """توليد تقرير الأداء الأساسي"""
+        if not self.trades:
+            return "⚠️ لا توجد صفقات"
+
+        df = pd.DataFrame(self.trades)
+        balance_history = [self.initial_balance]
+        balance = self.initial_balance
+        for t in self.trades:
+            balance += t['size'] * t['pnl']
+            balance_history.append(balance)
+
+        total_pnl = self.current_balance - self.initial_balance
+        total_pnl_pct = total_pnl / self.initial_balance * 100
+        win_rate = len(df[df['pnl'] > 0]) / len(df) * 100 if len(df) > 0 else 0
+        returns = df['pnl']
+        sharpe = (returns.mean() / returns.std() * np.sqrt(252)) if returns.std() > 0 else 0
+        drawdowns = pd.Series(balance_history) / pd.Series(balance_history).cummax() - 1
+        max_dd = drawdowns.min() * 100
+
+        # تحليل قوة الإشارة
+        strength_analysis = {}
+        min_strength = self.signal_config.get('min_signal_strength', 5)
+        max_strength = self.signal_config.get('max_signal_strength', 10)
+        
+        for strength in range(min_strength, max_strength + 1):
+            strength_trades = [t for t in self.trades if t.get('signal_strength', 0) == strength]
+            if strength_trades:
+                strength_win_rate = len([t for t in strength_trades if t['pnl'] > 0]) / len(strength_trades) * 100
+                strength_avg_pnl = np.mean([t['pnl'] for t in strength_trades]) * 100
+                strength_analysis[strength] = {
+                    'count': len(strength_trades),
+                    'win_rate': strength_win_rate,
+                    'avg_pnl': strength_avg_pnl
+                }
+
+        report = f"""
+📈 تقرير الأداء النهائي - النظام المطور
+────────────────────
+• الرصيد: ${self.initial_balance:,.2f} → ${self.current_balance:,.2f}
+• إجمالي الربح/الخسارة: ${total_pnl:+.2f} ({total_pnl_pct:+.2f}%)
+• إجمالي الصفقات: {len(self.trades)}
+• معدل الفوز: {win_rate:.1f}%
+• متوسط الربح: {df[df['pnl']>0]['pnl'].mean()*100:+.2f}%
+• متوسط الخسارة: {df[df['pnl']<=0]['pnl'].mean()*100:+.2f}%
+• Sharpe Ratio: {sharpe:.2f}
+• أقصى انخفاض: {max_dd:.2f}%
+
+📊 تحليل قوة الإشارة ({min_strength}-{max_strength}):
+"""
+        
+        for strength, analysis in strength_analysis.items():
+            report += f"• قوة {strength}: {analysis['count']} صفقات | ربح {analysis['win_rate']:.1f}% | متوسط {analysis['avg_pnl']:+.2f}%\n"
+
+        report += "────────────────────"
+        return report.strip()
+
+    def send_detailed_telegram_report(self):
+        """إرسال تقرير مفصل عبر التلغرام"""
+        if not TELEGRAM_CONFIG['bot_token'] or not TELEGRAM_CONFIG['chat_id']:
+            if ENABLE_LOGGING:
+                logger.warning("مفاتيح التلغرام غير متوفرة")
+            return
+        
+        try:
+            bot = telebot.TeleBot(TELEGRAM_CONFIG['bot_token'])
+            
+            # إرسال التقرير الأساسي
+            basic_report = self.generate_report()
+            bot.send_message(TELEGRAM_CONFIG['chat_id'], basic_report)
+            
+            # إرسال التقرير المفصل
+            if ENABLE_DETAILED_REPORT and self.trades:
+                detailed_report = self.generate_detailed_report()
+                
+                # تقسيم التقرير إذا كان طويلاً
+                if len(detailed_report) > 4000:
+                    parts = [detailed_report[i:i+4000] for i in range(0, len(detailed_report), 4000)]
+                    for part in parts:
+                        bot.send_message(TELEGRAM_CONFIG['chat_id'], part)
+                        import time
+                        time.sleep(1)
+                else:
+                    bot.send_message(TELEGRAM_CONFIG['chat_id'], detailed_report)
+                
+                if ENABLE_LOGGING:
+                    logger.info("تم إرسال التقرير المفصل إلى التلغرام")
+            else:
+                bot.send_message(TELEGRAM_CONFIG['chat_id'], "⚠️ لا توجد بيانات كافية للتقرير المفصل")
+                
+        except Exception as e:
+            if ENABLE_LOGGING:
+                logger.error(f"خطأ في إرسال التقرير التلغرام: {e}")
+
+    def analyze_loss_reasons(self):
+        """تحليل أسباب الخسارة - من الكود الثاني"""
+        if not self.trades:
+            return "لا توجد صفقات لتحليلها"
+        
+        losing_trades = [t for t in self.trades if t['pnl'] <= 0]
+        if not losing_trades:
+            return "🎉 لا توجد صفقات خاسرة!"
+        
+        # تحليل حسب سبب الإغلاق
+        stop_loss_trades = [t for t in losing_trades if t['reason'] == 'STOP_LOSS']
+        time_exit_trades = [t for t in losing_trades if t['reason'] == 'TIME_EXIT']
+        trailing_stop_trades = [t for t in losing_trades if t['reason'] == 'TRAILING_STOP']
+        
+        analysis = "🔍 تحليل مفصل للصفقات الخاسرة:\n\n"
+        
+        # تحليل صفقات وقف الخسارة
+        if stop_loss_trades:
+            analysis += f"🛑 صفقات وقف الخسارة ({len(stop_loss_trades)} صفقة):\n"
+            
+            avg_strength = np.mean([t['signal_strength'] for t in stop_loss_trades])
+            analysis += f"• متوسط قوة الإشارة: {avg_strength:.1f}/10\n"
+            
+            avg_rsi_entry = np.mean([t.get('entry_rsi', 50) for t in stop_loss_trades])
+            analysis += f"• متوسط RSI عند الدخول: {avg_rsi_entry:.1f}\n"
+            
+            avg_duration = np.mean([t.get('duration_hours', 0) for t in stop_loss_trades])
+            analysis += f"• متوسط المدة: {avg_duration:.1f} ساعة\n"
+            
+            analysis += "\n💡 اقتراحات التحسين:\n"
+            if avg_strength < 6:
+                analysis += "• زيادة الحد الأدنى لقوة الإشارة إلى 6+\n"
+            if avg_rsi_entry > 65 or avg_rsi_entry < 35:
+                analysis += "• تجنب الدخول عند مستويات RSI المتطرفة\n"
+            if avg_duration < 12:
+                analysis += "• تقليل حجم وقف الخسارة قليلاً\n"
+        
+        # تحليل صفقات الخروج الزمني
+        if time_exit_trades:
+            analysis += f"\n⏰ صفقات الخروج الزمني ({len(time_exit_trades)} صفقة):\n"
+            
+            avg_duration = np.mean([t.get('duration_hours', 0) for t in time_exit_trades])
+            analysis += f"• متوسط المدة: {avg_duration:.1f} ساعة\n"
+            
+            avg_price_change = np.mean([t.get('price_change', 0) for t in time_exit_trades])
+            analysis += f"• متوسط تغير السعر: {avg_price_change:+.2f}%\n"
+            
+            analysis += "\n💡 اقتراحات التحسين:\n"
+            if avg_duration > 40:
+                analysis += "• تقليل المدة القصوى للصفقة\n"
+            if abs(avg_price_change) < 1.0:
+                analysis += "• زيادة فترة الاحتفاظ للصفقات الجانبية\n"
+        
+        # تحليل صفقات التداول المتعقب
+        if trailing_stop_trades:
+            analysis += f"\n🎯 صفقات التداول المتعقب ({len(trailing_stop_trades)} صفقة):\n"
+            analysis += "• هذه الصفقات حققت بعض الأرباح قبل الإغلاق\n"
+            analysis += "• التفكير في تعديل نسبة التفعيل أو نسبة التعقب\n"
+        
+        # تحليل عام
+        analysis += f"\n📊 إحصائيات عامة للخسائر:\n"
+        analysis += f"• إجمالي الصفقات الخاسرة: {len(losing_trades)}\n"
+        analysis += f"• متوسط الخسارة: {np.mean([t['pnl'] for t in losing_trades]) * 100:.2f}%\n"
+        analysis += f"• أكبر خسارة: {min([t['pnl'] for t in losing_trades]) * 100:.2f}%\n"
+        
+        return analysis
+
+    def generate_improvement_suggestions(self):
+        """توليد اقتراحات تحسين عامة بناءً على الأداء - من الكود الثاني"""
+        if not self.trades:
+            return "لا توجد بيانات كافية لتوليد اقتراحات"
+        
+        winning_trades = [t for t in self.trades if t['pnl'] > 0]
+        losing_trades = [t for t in self.trades if t['pnl'] <= 0]
+        total_trades = len(self.trades)
+        
+        suggestions = "🚀 اقتراحات تحسين الاستراتيجية:\n\n"
+        
+        # تحليل نسبة الربح
+        win_rate = len(winning_trades) / total_trades * 100
+        if win_rate < 40:
+            suggestions += "• 📉 نسبة الربح منخفضة - فكر في:\n"
+            suggestions += "  - زيادة الحد الأدنى لقوة الإشارة\n"
+            suggestions += "  - إضافة مؤشرات تأكيد إضافية\n"
+            suggestions += "  - مراجعة شروط الدخول\n"
+        elif win_rate > 70:
+            suggestions += "• 📈 نسبة الربح ممتازة - يمكن:\n"
+            suggestions += "  - زيادة حجم المركز تدريجياً\n"
+            suggestions += "  - توسيع نطاق قوة الإشارة المقبولة\n"
+        
+        # تحليل متوسط الربح/الخسارة
+        if winning_trades and losing_trades:
+            avg_win = np.mean([t['pnl'] for t in winning_trades]) * 100
+            avg_loss = np.mean([t['pnl'] for t in losing_trades]) * 100
+            
+            risk_reward_ratio = abs(avg_win / avg_loss) if avg_loss != 0 else 0
+            
+            suggestions += f"• ⚖️ نسبة المخاطرة/العائد: {risk_reward_ratio:.2f}\n"
+            if risk_reward_ratio < 1.5:
+                suggestions += "  - زيادة نسبة جني الأرباح أو تقليل وقف الخسارة\n"
+            elif risk_reward_ratio > 3:
+                suggestions += "  - النسبة ممتازة - الحفاظ على الإعدادات الحالية\n"
+        
+        # تحليل قوة الإشارة
+        if winning_trades:
+            avg_win_strength = np.mean([t['signal_strength'] for t in winning_trades])
+            avg_loss_strength = np.mean([t['signal_strength'] for t in losing_trades]) if losing_trades else 0
+            
+            suggestions += f"• 💪 متوسط قوة إشارة الصفقات:\n"
+            suggestions += f"  - الرابحة: {avg_win_strength:.1f}/10\n"
+            if losing_trades:
+                suggestions += f"  - الخاسرة: {avg_loss_strength:.1f}/10\n"
+            
+            if avg_win_strength > avg_loss_strength + 1 and losing_trades:
+                suggestions += "  - ✓ قوة الإشارة مؤشر جيد للربحية\n"
+            elif avg_win_strength <= avg_loss_strength and losing_trades:
+                suggestions += "  - ⚠️ مراجعة حساب قوة الإشارة\n"
+        
+        # اقتراحات تقنية
+        suggestions += "\n🔧 اقتراحات تقنية:\n"
+        suggestions += "• مراجعة إعدادات المؤشرات الحالية\n"
+        suggestions += "• اختبار فترات زمنية مختلفة\n"
+        suggestions += "• إضافة مؤشرات اتجاه إضافية\n"
+        suggestions += "• تحسين إدارة رأس المال\n"
+        
+        return suggestions
+
 # ====================== التشغيل ======================
 def main():
     if ENABLE_LOGGING:
