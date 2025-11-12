@@ -1,7 +1,10 @@
 pandas==1.5.3
 numpy==1.21.6
 requests==2.28.2
-pyTelegramBotAPI==4.12.0
 python-dotenv==1.0.0
 tenacity==8.2.3
 matplotlib==3.7.1
+python-binance==1.0.19
+telebot==0.0.5
+python-dotenv==1.0.0
+schedule==1.2.0
