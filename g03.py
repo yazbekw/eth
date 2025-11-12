@@ -17,7 +17,7 @@ warnings.filterwarnings('ignore')
 load_dotenv()  # تحميل المتغيرات من .env
 
 # ====================== إعدادات التفعيل / الإلغاء ======================
-ENABLE_TRAILING_STOP = True
+ENABLE_TRAILING_STOP = False
 ENABLE_DYNAMIC_POSITION_SIZING = True
 ENABLE_MARKET_REGIME_FILTER = True
 ENABLE_ATR_SL_TP = True
