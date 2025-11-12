@@ -60,7 +60,7 @@ TRADE_CONFIG = {
 }
 
 INDICATOR_CONFIG = {
-    'rsi_period': 14,
+    'rsi_period': 21,
     'rsi_overbought': 70,
     'rsi_oversold': 30,
     'ema_fast': 9,
@@ -78,7 +78,7 @@ SIGNAL_CONFIG = {
     'use_volume_filter': True,
     'prevent_conflicts': True,
     'min_signal_strength': 5,
-    'max_signal_strength': 8,
+    'max_signal_strength': 6,
     'require_trend_confirmation': True,
     'min_volume_ratio': 1.0
 }
