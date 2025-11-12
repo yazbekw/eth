@@ -18,8 +18,8 @@ load_dotenv()
 
 # ====================== إعدادات التفعيل / الإلغاء ======================
 ENABLE_TRAILING_STOP = False
-ENABLE_DYNAMIC_POSITION_SIZING = True
-ENABLE_MARKET_REGIME_FILTER = True
+ENABLE_DYNAMIC_POSITION_SIZING = False
+ENABLE_MARKET_REGIME_FILTER = False
 ENABLE_ATR_SL_TP = False
 ENABLE_SUPPORT_RESISTANCE_FILTER = True
 ENABLE_TIME_FILTER = False
@@ -44,7 +44,7 @@ TRADE_CONFIG = {
     'leverage': 1,
     'base_stop_loss': 0.02,
     'base_take_profit': 0.06,
-    'base_position_size': 0.1,
+    'base_position_size': 0.2,
     'max_positions': 4,
     'paper_trading': True,
     'use_trailing_stop': ENABLE_TRAILING_STOP,
