@@ -42,15 +42,15 @@ TRADE_CONFIG = {
     'timeframe': '4h',
     'initial_balance': 200,
     'leverage': 1,
-    'base_stop_loss': 0.025,
-    'base_take_profit': 0.060,
+    'base_stop_loss': 0.02,
+    'base_take_profit': 0.06,
     'base_position_size': 0.1,
     'max_positions': 4,
     'paper_trading': True,
     'use_trailing_stop': ENABLE_TRAILING_STOP,
     'trailing_stop_percent': 0.015,
     'trailing_activation': 0.02,
-    'max_trade_duration': 60,
+    'max_trade_duration': 48,
     'atr_multiplier_sl': 2.0,
     'atr_multiplier_tp': 4.0,
     'atr_period': 14,
@@ -78,7 +78,7 @@ SIGNAL_CONFIG = {
     'use_volume_filter': True,
     'prevent_conflicts': True,
     'min_signal_strength': 5,    # نطاق مرن لقوة الإشارة
-    'max_signal_strength': 10,
+    'max_signal_strength': 5,
     'require_trend_confirmation': True,
     'min_volume_ratio': 1.0
 }
