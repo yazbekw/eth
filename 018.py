@@ -42,7 +42,7 @@ SIGNAL_CONFIG = {
     'min_volume_ratio': 1.0,
     'require_trend_confirmation': True,
     'prevent_conflicts': True,
-    'min_signal_strength': 5,
+    'min_signal_strength': 4,
     'max_signal_strength': 8
 }
 
