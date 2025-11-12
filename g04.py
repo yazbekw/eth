@@ -670,50 +670,92 @@ class AdvancedCryptoBot:
         self.analysis_results = analysis
         return analysis
 
+    
+
     def generate_detailed_report(self):
-        """توليد تقرير مفصل مع تحليل قوة الإشارة"""
+        """توليد تقرير مفصل مع تحليل قوة الإشارة المتقدم"""
         if not self.trades:
             return "لا توجد صفقات لتحليلها"
-        
+    
         analysis = self.analyze_trades()
-        
+        df = pd.DataFrame(self.trades)
+    
         report = f"""
-📊 **تقرير أداء مفصل - البوت المطور**
+📊 **تقرير أداء مفصل - البوت المطور بنظام قوة الإشارة**
 
-**🎯 تحليل قوة الإشارة:**
+**🎯 تحليل قوة الإشارة المتقدم:**
 """
-        
-        # تحليل أداء قوة الإشارة
-        for strength in sorted(analysis.get('strength_stats', {}).keys()):
-            stats = analysis['strength_stats'][strength]
-            report += f"• قوة {strength}: {stats['count']} صفقات | ربح {stats['win_rate']:.1f}% | متوسط {stats['avg_pnl']:+.2f}%\n"
+    
+        # تحليل أداء قوة الإشارة بشكل مفصل
+        if analysis.get('strength_stats'):
+            for strength in sorted(analysis['strength_stats'].keys()):
+                stats = analysis['strength_stats'][strength]
+                strength_emoji = "💪" * min(strength, 5)
+                report += f"• {strength_emoji} قوة {strength}: {stats['count']} صفقات | ربح {stats['win_rate']:.1f}% | متوسط {stats['avg_pnl']:+.2f}%\n"
 
-        if analysis.get('best_strength'):
-            report += f"• أفضل قوة إشارة: {analysis['best_strength']}\n"
+        # أفضل وأسوأ قوة إشارة
+        if analysis.get('strength_stats'):
+            best_strength = analysis['best_strength']
+            worst_strength = min(analysis['strength_stats'].items(), key=lambda x: x[1]['avg_pnl'])[0] if analysis['strength_stats'] else None
+        
+            report += f"\n**🏆 أفضل أداء:** قوة {best_strength}"
+            if worst_strength and worst_strength != best_strength:
+                report += f" | **📉 أسوأ أداء:** قوة {worst_strength}"
 
         report += f"""
+    
 **📈 الإحصائيات الأساسية:**
 • إجمالي الصفقات: {analysis['total_trades']}
 • معدل الفوز: {analysis['win_rate']:.1f}%
 • متوسط الربح: {analysis['avg_win']:+.2f}%
 • متوسط الخسارة: {analysis['avg_loss']:.2f}%
+• نسبة الربح/الخسارة: {abs(analysis['avg_win']/analysis['avg_loss']):.2f} إذا كانت الخسارة غير صفرية
 
-**💡 توصيات بناء على قوة الإشارة:**
+**🔍 تحليل أسباب الإغلاق:**
 """
-        
-        # توليد توصيات ذكية بناء على تحليل قوة الإشارة
+    
+        # تحليل أسباب الإغلاق
+        if 'reason_analysis' in analysis and not analysis['reason_analysis'].empty:
+            for reason, data in analysis['reason_analysis'].iterrows():
+                count = data[('pnl', 'count')]
+                avg_pnl = data[('pnl', 'mean')] * 100
+                report += f"• {reason}: {count} صفقات | متوسط: {avg_pnl:+.2f}%\n"
+
+        report += "\n**💡 توصيات استراتيجية بناء على قوة الإشارة:**\n"
+    
+        # توصيات ذكية بناء على تحليل قوة الإشارة
         if analysis.get('strength_stats'):
-            best_strength = analysis['best_strength']
-            if best_strength and best_strength >= 7:
-                report += f"• التركيز على الإشارات بقوة {best_strength}+ للحصول على أفضل النتائج\n"
+            best_stats = analysis['strength_stats'][analysis['best_strength']]
+        
+            if best_stats['win_rate'] >= 70 and best_stats['avg_pnl'] > 2:
+                report += f"• 🎯 التركيز على الإشارات بقوة {analysis['best_strength']}+ (أداء ممتاز)\n"
+                report += f"• 💰 زيادة حجم المركز للإشارات عالية القوة\n"
             elif analysis['win_rate'] < 50:
-                report += "• زيادة الحد الأدنى لقوة الإشارة لتحسين الجودة\n"
+                report += f"• ⚠️ زيادة الحد الأدنى لقوة الإشارة إلى {analysis['best_strength']}+ لتحسين الجودة\n"
+                report += f"• 📊 مراجعة شروط الدخول للإشارات منخفضة القوة\n"
             else:
-                report += "• توزيع قوة الإشارة متوازن - الحفاظ على الإعدادات الحالية\n"
+                report += f"• ✅ توزيع قوة الإشارة متوازن - الحفاظ على الإعدادات الحالية\n"
+                report += f"• 🔄 اختبار نطاق قوة أضيق ({analysis['best_strength']-1}-{analysis['best_strength']+1}) للتحسين\n"
+
+        # إضافة تحليل الخسائر إذا كان هناك خسائر
+        losing_trades = [t for t in self.trades if t['pnl'] <= 0]
+        if losing_trades:
+            report += f"\n**🛑 تحليل الخسائر ({len(losing_trades)} صفقة):**\n"
+            avg_loss_strength = np.mean([t['signal_strength'] for t in losing_trades])
+            report += f"• متوسط قوة الإشارة للخسائر: {avg_loss_strength:.1f}/10\n"
+        
+            if avg_loss_strength > 6:
+                report += "• ⚠️ الخسائر تأتي من إشارات عالية القوة - مراجعة المؤشرات\n"
+            else:
+                report += "• ✅ معظم الخسائر من إشارات منخفضة القوة - النظام يعمل جيداً\n"
+
+        report += f"\n**⏰ الفترة:** {self.data['timestamp'].iloc[0].date()} إلى {self.data['timestamp'].iloc[-1].date()}"
+        report += f"\n**🔄 آخر تحديث:** {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}"
 
         return report
+        
 
-        def generate_report(self):
+    def generate_report(self):
         """توليد تقرير الأداء الأساسي"""
         if not self.trades:
             return "⚠️ لا توجد صفقات"
