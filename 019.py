@@ -43,7 +43,7 @@ SIGNAL_CONFIG = {
     'require_trend_confirmation': True,
     'prevent_conflicts': True,
     'min_signal_strength': 5,
-    'max_signal_strength': 8
+    'max_signal_strength': 5
 }
 
 TELEGRAM_CONFIG = {
