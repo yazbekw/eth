@@ -77,8 +77,8 @@ SIGNAL_CONFIG = {
     'use_trend_filter': True,
     'use_volume_filter': True,
     'prevent_conflicts': True,
-    'min_signal_strength': 5,
-    'max_signal_strength': 5
+    'min_signal_strength': 6,
+    'max_signal_strength': 10
 }
 
 TELEGRAM_CONFIG = {
