@@ -78,7 +78,7 @@ SIGNAL_CONFIG = {
     'use_volume_filter': True,
     'prevent_conflicts': True,
     'min_signal_strength': 5,
-    'max_signal_strength': 5,
+    'max_signal_strength': 6,
     'require_trend_confirmation': True,
     'min_volume_ratio': 1.0
 }
