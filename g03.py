@@ -17,7 +17,7 @@ warnings.filterwarnings('ignore')
 load_dotenv()  # تحميل المتغيرات من .env
 
 # ====================== إعدادات التفعيل / الإلغاء ======================
-ENABLE_TRAILING_STOP = False
+ENABLE_TRAILING_STOP = True
 ENABLE_DYNAMIC_POSITION_SIZING = True
 ENABLE_MARKET_REGIME_FILTER = True
 ENABLE_ATR_SL_TP = True
@@ -73,7 +73,7 @@ INDICATOR_CONFIG = {
 }
 
 SIGNAL_CONFIG = {
-    'min_conditions': 3,
+    'min_conditions': 4,
     'use_trend_filter': True,
     'use_volume_filter': True,
     'prevent_conflicts': True,
