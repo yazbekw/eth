@@ -225,7 +225,6 @@ class AdvancedCryptoBot:
     def fetch_binance_data(self, symbol, days=60):
         """جلب البيانات من Binance"""
         try:
-            symbol = self.trade_config['symbol']
             interval = self.trade_config['timeframe']
             limit = 1000
             all_data = []
