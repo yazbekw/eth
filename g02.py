@@ -203,6 +203,7 @@ class AdvancedCryptoBot:
     def calculate_indicators(self):
         df = self.data
         p = self.indicator_config
+        t = self.trade_config  # اختصار
 
         # RSI
         delta = df['close'].diff()
@@ -229,13 +230,13 @@ class AdvancedCryptoBot:
         # Volume MA
         df['volume_ma'] = df['volume'].rolling(20, min_periods=1).mean()
 
-        # ATR
+        # ATR - من TRADE_CONFIG
         if ENABLE_ATR_SL_TP:
-            df['atr'] = self.calculate_atr(p['atr_period'])
+            df['atr'] = self.calculate_atr(t['atr_period'])
 
         # Support & Resistance
         if ENABLE_SUPPORT_RESISTANCE_FILTER:
-            window = self.trade_config['support_resistance_window']
+            window = t['support_resistance_window']
             df['resistance'] = df['high'].rolling(window).max()
             df['support'] = df['low'].rolling(window).min()
 
