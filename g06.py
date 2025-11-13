@@ -93,7 +93,7 @@ SIGNAL_CONFIG = {
 BINANCE_CONFIG = {
     'api_key': os.getenv('BINANCE_API_KEY', ''),
     'api_secret': os.getenv('BINANCE_API_SECRET', ''),
-    'testnet': True
+    'testnet': False
 }
 
 TELEGRAM_CONFIG = {
@@ -242,7 +242,7 @@ class AdvancedCryptoBot:
                     'limit': min(limit, required_candles - len(all_data)),
                     'endTime': end_time
                 }
-                response = requests.get("https://testnet.binance.vision/api/v3/klines", params=params, timeout=15)
+                response = requests.get("https://no.binance.com/api/v3/klines", params=params)                
                 response.raise_for_status()
                 data = response.json()
                 if not data or len(data) == 0:
