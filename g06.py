@@ -85,7 +85,7 @@ SIGNAL_CONFIG = {
 BINANCE_CONFIG = {
     'api_key': os.getenv('BINANCE_API_KEY', ''),
     'api_secret': os.getenv('BINANCE_API_SECRET', ''),
-    'base_url': 'https://testnet.binance.vision/api/v3/'
+    'base_url': 'https://demo.binance.com/api/v3/'  # تغيير إلى Demo
 }
 
 TELEGRAM_CONFIG = {
