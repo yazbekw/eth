@@ -38,7 +38,7 @@ def interval_to_hours(interval):
 # ====================== الإعدادات الأساسية ======================
 TRADE_CONFIG = {
     'symbols': ['BTCUSDT', 'BNBUSDT', 'ETHUSDT', 'ADAUSDT', 'DOTUSDT', 'LINKUSDT', 'LTCUSDT', 'XRPUSDT'],
-    'timeframe': '4h',
+    'timeframe': '1h',
     'initial_balance': 10000,
     'leverage': 1,
     'base_stop_loss': 0.025,
@@ -59,7 +59,7 @@ TRADE_CONFIG = {
 }
 
 INDICATOR_CONFIG = {
-    'rsi_period': 21,
+    'rsi_period': 14,
     'rsi_overbought': 70,
     'rsi_oversold': 30,
     'ema_fast': 9,
