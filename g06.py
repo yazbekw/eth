@@ -797,6 +797,40 @@ def run_live_bot():
     
     bot = AdvancedCryptoBot(TRADE_CONFIG, INDICATOR_CONFIG, SIGNAL_CONFIG, BINANCE_CONFIG)
     
+    # إضافة HTTP server بسيط للport binding
+    try:
+        import http.server
+        import socketserver
+        
+        PORT = int(os.getenv('PORT', 10000))
+        
+        class HealthCheckHandler(http.server.SimpleHTTPRequestHandler):
+            def do_GET(self):
+                if self.path == '/health':
+                    self.send_response(200)
+                    self.send_header('Content-type', 'text/plain')
+                    self.end_headers()
+                    self.wfile.write(b'Bot is running')
+                else:
+                    self.send_response(404)
+                    self.end_headers()
+        
+        # تشغيل الخادم في thread منفصل
+        from threading import Thread
+        def run_health_server():
+            with socketserver.TCPServer(("", PORT), HealthCheckHandler) as httpd:
+                if ENABLE_LOGGING:
+                    logger.info(f"🌐 Health check server running on port {PORT}")
+                httpd.serve_forever()
+        
+        server_thread = Thread(target=run_health_server, daemon=True)
+        server_thread.start()
+        
+    except Exception as e:
+        if ENABLE_LOGGING:
+            logger.warning(f"⚠️ Could not start health server: {e}")
+
+    # المهام المجدولة
     schedule.every(5).minutes.do(bot.run_live_signal_check)
     schedule.every(10).minutes.do(bot.update_balance_from_testnet)
     schedule.every().day.at("23:00").do(bot.send_daily_report_telegram)
