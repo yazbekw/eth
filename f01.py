@@ -19,14 +19,14 @@ load_dotenv()
 # ====================== إعدادات استراتيجية الفيبوناتشي ======================
 FIBONACCI_CONFIG = {
     'enabled': True,
-    'trend_ema_period': 50,  # لتحديد الاتجاه العام
-    'fibonacci_levels': [0.236, 0.382, 0.500, 0.618, 0.786],
-    'key_levels': [0.382, 0.500, 0.618],  # المستويات الرئيسية للدخول
-    'min_trend_strength': 0.02,  # قوة الاتجاه الأدنى (2%)
-    'swing_period': 20,  # الفترة لتحديد القمم والقيعان
+    'trend_ema_period': 20,  # لتحديد الاتجاه العام
+    'fibonacci_levels': [0.236, 0.382, 0.500, 0.618, 0.786, 0.886],  # ✅ إضافة مستويات أكثر
+    'key_levels': [0.236, 0.382, 0.500, 0.618, 0.786],  # ✅ توسيع المستويات المقبولة للدخول
+    'min_trend_strength': 0.01,  # قوة الاتجاه الأدنى (2%)
+    'swing_period': 10,  # الفترة لتحديد القمم والقيعان
     'confirmation_candles': ['hammer', 'engulfing', 'doji', 'morning_star'],
-    'rsi_oversold': 30,
-    'rsi_overbought': 70,
+    'rsi_oversold': 35,
+    'rsi_overbought': 65,
     'volume_threshold': 1.2,  # زيادة الحجم عن المتوسط
 }
 
