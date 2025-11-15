@@ -3,6 +3,7 @@ import os
 import pandas as pd
 import numpy as np
 import requests
+from typing import Dict, Any, List, Optional, Tuple
 from datetime import datetime, timedelta
 import telebot
 import warnings
