@@ -39,7 +39,7 @@ def interval_to_hours(interval):
 
 # ====================== الإعدادات الأساسية ======================
 TRADE_CONFIG = {
-    'symbol': 'ETHUSDT',
+    'symbol': 'BNBUSDT',
     'timeframe': '4h',
     'initial_balance': 200,
     'leverage': 10,  # رافعة مناسبة للعقود الآجلة
@@ -80,8 +80,8 @@ SIGNAL_CONFIG = {
     'use_trend_filter': True,
     'use_volume_filter': True,
     'prevent_conflicts': True,
-    'min_signal_strength': 5,
-    'max_signal_strength': 6,
+    'min_signal_strength': 6,
+    'max_signal_strength': 7,
     'require_trend_confirmation': True,
     'min_volume_ratio': 1.0
 }
