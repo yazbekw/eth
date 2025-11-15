@@ -61,7 +61,7 @@ def interval_to_hours(interval):
 
 # ====================== الإعدادات الأساسية ======================
 TRADE_CONFIG = {
-    'symbols': ["BNBUSDT", "ETHUSDT", "BTCUSDT", "XRPUSDT"],
+    'symbols': ["BTCUSDT", "XRPUSDT", "SOLUSDT", "ADAUSDT"],
     'timeframe': '4h',
     'initial_balance': 200,
     'leverage': 10,
