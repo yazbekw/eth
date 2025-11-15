@@ -45,7 +45,7 @@ EXECUTE_TRADES = os.getenv("EXECUTE_TRADES", "false").lower() == "true"
 
 # ====================== إعدادات المسح ======================
 SCAN_INTERVAL = 600  # 10 دقائق بين كل فحص
-CONFIDENCE_THRESHOLD = 60  # عتبة الثقة للإشارات
+CONFIDENCE_THRESHOLD = 50  # عتبة الثقة للإشارات
 
 # ====================== دالة مساعدة ======================
 def interval_to_hours(interval):
