@@ -7,3 +7,5 @@ matplotlib==3.7.2
 tenacity==8.2.3
 schedule==1.2.0
 pytelegrambotapi==4.14.0
+fastapi==0.104.1
+
